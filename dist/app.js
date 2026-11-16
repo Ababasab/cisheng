@@ -3,6 +3,7 @@ import { findGutter, headwordInset } from './layout.js';
 import { lookupWord, loadExamples, pickExamples } from './learning.js';
 import {migrateFolders,folderWords,addToFolder,folderName} from './folders.js';
 import {SpeechPlayer,matchingVoices,voiceId} from './speech.js';
+import {OcrWorker,loadingProgress} from './ocr.js';
 const $ = id => document.getElementById(id);
 const KEY = 'word-notes-v1';
 let words = [], accent = 'en-US', rate = .9, worker = null, ocrRun = 0, editing = null, playing = null, speechRun = 0, previewURL = null;
@@ -203,6 +204,7 @@ async function recognize(file){
  if(!/^image\/(jpeg|png|webp)$/.test(file.type))return notice('请选择 JPG、PNG 或 WebP 图片；HEIC 请先转为 JPG。');
  if(file.size>20*1024*1024)return notice('图片超过 20 MB，请压缩后重试。');
  const layout=$('layout').value, extraction=$('extract').value,importFolderId=activeFolderId;
+ $('ocr-error').hidden=true;
  const run=++ocrRun;document.body.classList.add('busy');$('recognizing').hidden=false;$('upload').disabled=$('camera').disabled=true;$('ocr-state').textContent='准备识别…';$('progress').value=0;
  previewURL=URL.createObjectURL(file);$('preview').src=previewURL;
  let activeWorker;
@@ -213,10 +215,8 @@ async function recognize(file){
   const columns=split?[{left:0,top:0,width:split,height:canvas.height},{left:split,top:0,width:canvas.width-split,height:canvas.height}]:[{left:0,top:0,width:canvas.width,height:canvas.height}];
   if(extraction==='headwords')for(const rect of columns){const inset=headwordInset(canvas,rect);rect.left+=inset;rect.width-=inset;}
   let columnIndex=0;
-  if(!window.Tesseract)throw Error('识别组件未能加载，请刷新页面重试。');
-  const ready=Tesseract.createWorker('eng',1,{workerPath:new URL('./vendor/worker.min.js',location.href).href,corePath:new URL('./vendor/core/',location.href).href,langPath:new URL('./vendor/lang/',location.href).href,workerBlobURL:false,logger:m=>{if(run!==ocrRun)return;const isText=m.status==='recognizing text';$('ocr-state').textContent=isText?`识别第 ${columnIndex+1}/${columns.length} 栏 · ${Math.round(m.progress*100)}%`:'加载本地识别引擎…';$('progress').value=isText?(columnIndex+m.progress)/columns.length:0;}});
-  activeWorker=await ready;
-  if(run!==ocrRun){await activeWorker.terminate();return;}worker=activeWorker;
+  activeWorker=new OcrWorker(m=>{if(run!==ocrRun)return;const isText=m.status==='recognizing text',stage=loadingProgress(m);$('ocr-state').textContent=isText?`识别第 ${columnIndex+1}/${columns.length} 栏 · ${Math.round(m.progress*100)}%`:stage.label;$('progress').value=isText?(columnIndex+m.progress)/columns.length:stage.value;});worker=activeWorker;
+  await activeWorker.initialize();if(run!==ocrRun)return;
   await activeWorker.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1',user_defined_dpi:'300'});
   const texts=[];
   for(columnIndex=0;columnIndex<columns.length;columnIndex++){
@@ -225,7 +225,7 @@ async function recognize(file){
   }
   const extracted=texts.join('\n');
   if(!extracted.trim())notice('没有识别到英文单词，请拍清楚一些，或直接输入。');else openReview(extracted,null,true,importFolderId);
- }catch(error){if(run===ocrRun)notice(error.message==='识别组件未能加载，请刷新页面重试。'?error.message:'识别未成功，请换一张清晰的 JPG 图片，或直接输入单词。');}
+ }catch(error){if(run===ocrRun){const message=error.message||'识别失败，请检查网络或更换图片。';$('ocr-error').textContent=message;$('ocr-error').hidden=false;notice(message);}}
  finally{if(run===ocrRun){if(activeWorker)await activeWorker.terminate().catch(()=>{});worker=null;finishOCR();}}
 }
 $('voice-choice').onchange=()=>{stop();voicePreferences[accent]=$('voice-choice').value;speechPlayer.failed.clear();persist();updateVoice();};

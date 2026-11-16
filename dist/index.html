@@ -13,6 +13,7 @@
     <p class="ocr-hint">单词书用“词条”模式；一行有多个单词时选“全部英文”。全程本地识别，无需 AI 接口。</p>
     <div id="dropzone" class="dropzone"><svg viewBox="0 0 48 48" aria-hidden="true"><rect x="7" y="12" width="34" height="27" rx="6"/><path d="M16 12l3-5h10l3 5"/><circle cx="24" cy="25" r="7"/></svg><strong>让纸上的单词开口</strong><span>拖入图片，或选择下面的方式</span><button id="upload" class="primary">选择图片 <span>↗</span></button><button id="camera" class="text-button">用手机拍一张</button><small>JPG / PNG / WebP · 单张不超过 20 MB</small></div>
     <input id="file" type="file" accept="image/jpeg,image/png,image/webp" hidden><input id="camera-file" type="file" accept="image/*" capture="environment" hidden>
+    <p class="ocr-hint">首次识别需下载约 3 MB 英语模型，另需加载识别引擎，建议使用 Wi-Fi；照片仍在本机处理。</p><p id="ocr-error" class="form-error" role="alert" hidden></p>
     <div id="recognizing" hidden><img id="preview" alt="正在识别的单词照片"><div class="progress-label"><strong id="ocr-state">准备识别…</strong><button id="cancel-ocr" class="text-button">取消</button></div><progress id="progress" max="1" value="0"></progress></div>
     <button id="manual" class="manual-button"><span>＋</span> 也可以直接输入 / 粘贴单词</button><p class="folder-help import-help">添加时可选已有文件夹，或新建并命名。</p>
    </section>
@@ -40,5 +41,5 @@
 <dialog id="folder-dialog"><form method="dialog"><div class="section-label">把词汇整理成自己的节奏</div><h2 id="folder-dialog-title">新建文件夹</h2><label for="folder-name-input">文件夹名称</label><input id="folder-name-input" maxlength="60" autocomplete="off" placeholder="例如：四级核心词 / 旅行英语"><p id="folder-name-error" class="form-error" role="alert"></p><div class="dialog-actions"><button value="cancel" class="quiet">取消</button><button type="button" id="save-folder" class="primary">保存</button></div></form></dialog>
 <dialog id="confirm-clear"><form method="dialog"><h2 id="clear-title">清空当前文件夹？</h2><p>只清空这个文件夹内的单词，其他文件夹不受影响。清空后无法恢复，可以先导出备份。</p><div class="dialog-actions"><button value="cancel" class="quiet">保留单词</button><button value="clear" class="primary">确认清空</button></div></form></dialog>
 <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
-<script src="./vendor/tesseract.min.js" defer></script><script src="./app.js" type="module"></script>
+<script src="./app.js" type="module"></script>
 </body></html>

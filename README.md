@@ -53,3 +53,11 @@ OCR 引擎与英语模型已放在 `dist/vendor/`，运行时不依赖外部 CDN
 参考：[Tesseract.js 本地资源说明](https://github.com/naptha/tesseract.js/blob/master/docs/local-installation.md)、[设备语音列表接口](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesis/getVoices)。
 
 语音修复：提供声音下拉选择、试听、停止、重新读取声音列表和无声帮助；记录各口音的选择。在线声音失败不再直接终止，改为尝试其他可用声音，并显示网络、设备或权限相关错误。检测启动超时，停止或切换后忽略旧回调，保留当前 utterance 引用避免提前回收。单词和整句使用同一播放逻辑。验证运行 `node --test tests/*.test.js` 与 `python tests/speech_browser_qa.py`。真实 Edge 默认声音的播放完成事件及 Windows 本机 Zira 非静音 WAV 已验证，不代表已验证用户扬声器实际音量。
+
+## 手机 OCR 加载修复
+
+首次识别需要从本站下载模型与引擎，不是初次打开就已完全离线。新增 LSTM-only 英语模型 eng-lstm-v1.traineddata.gz（2,952,873 字节），替代初始化时下载的旧 10,923,060 字节模型；旧文件仅保留兼容，不再被新识别流程请求。重下模型可运行 python scripts/download_ocr_model.py，来源为固定版本 @tesseract.js-data/eng 1.0.0 的 4.0.0_best_int。
+
+初始化显示模型下载字节数和引擎/内存/模型装载阶段。识别线程在初始化前就归应用管理，取消立即终止下载和 worker；下载最长 120 秒，每个 worker 阶段最长 90 秒，失败后恢复上传并保留具体提示。直接将下载模型传入 worker，避开部分手机 IndexedDB 缓存卡住的问题。模型仍利用浏览器普通 HTTP 缓存，不依赖第三方运行时 CDN。适配层 dist/ocr.js 使用随站点固定的 Tesseract.js 6.0.1 worker 消息协议，升级供应商版本时必须重新验证协议和 OCR 测试。
+
+验证：node --test tests/*.test.js；python tests/ocr_mobile_qa.py；python tests/browser_qa.py；tests/book_qa.py 需要原图和参考词表路径。手机视口测试不等同于真实 iPhone 网络；不能保证 GitHub Pages 在所有移动网络可达。

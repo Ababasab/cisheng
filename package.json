@@ -1,1 +1,1 @@
-{"name":"word-listen","private":true,"type":"module","scripts":{"test":"node --test tests/words.test.js tests/learning.test.js tests/folders.test.js tests/speech.test.js","start":"python -m http.server 4173 --bind 127.0.0.1 --directory dist"}}
+{"name":"word-listen","private":true,"type":"module","scripts":{"test":"node --test tests/words.test.js tests/learning.test.js tests/folders.test.js tests/speech.test.js tests/ocr.test.js","start":"python -m http.server 4173 --bind 127.0.0.1 --directory dist"}}
