@@ -1,0 +1,15 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {SpeechPlayer,matchingVoices} from '../dist/speech.js';
+class Utterance{constructor(text){this.text=text;}}
+const local={name:'Zira',lang:'en-US',voiceURI:'zira',localService:true};
+const online={name:'Ava Online',lang:'en-US',voiceURI:'ava',localService:false};
+function setup(voices=[online,local],options={}){const calls=[],states=[];const engine={getVoices:()=>voices,cancel(){},speak(u){calls.push(u);},resume(){this.paused=false;this.resumed=true;}};const player=new SpeechPlayer(engine,Utterance,(s,d)=>states.push([s,d]),options);return{calls,states,engine,player};}
+test('auto selects local voice before an online voice, preserving accent and rate',()=>{const x=setup();x.player.play('passport',{lang:'en-US',rate:.7});assert.equal(x.calls[0].voice,local);assert.equal(x.calls[0].rate,.7);assert.equal(x.calls[0].volume,1);x.calls[0].onend();assert.equal(x.player.current,null);});
+test('failed selected online voice retries local; old canceled events cannot cancel retry',()=>{const x=setup();x.player.play('sentence',{preferred:'ava'});const old=x.calls[0];old.onerror({error:'network'});assert.equal(x.calls[1].voice,local);old.onerror({error:'interrupted'});assert.equal(x.player.current,x.calls[1]);x.calls[1].onend();assert.equal(x.states.at(-1)[0],'done');});
+test('cancellation prevents late events from restarting or replacing another utterance',()=>{const x=setup();x.player.play('first');const old=x.calls[0];x.player.play('second');old.onerror({error:'network'});assert.equal(x.calls.length,2);assert.equal(x.player.current.text,'second');x.player.cancel();assert.equal(x.player.current,null);});
+test('browser default can run even when no voice list has loaded',()=>{const x=setup([]);x.player.play('hello');assert.equal(x.calls.length,1);assert.equal(x.calls[0].voice,undefined);assert.equal(x.calls[0].lang,'en-US');x.calls[0].onend();});
+test('explicit browser default overrides enumerated voices and paused engine resumes',()=>{const x=setup();x.engine.paused=true;x.player.play('hello',{preferred:'__system__'});assert.equal(x.calls[0].voice,undefined);assert.equal(x.engine.resumed,true);x.player.cancel();});
+test('a silent engine times out, tries alternatives, and eventually reports an error',async()=>{const x=setup([online],{startTimeout:10});x.player.play('hello');await new Promise(r=>setTimeout(r,60));assert.equal(x.calls.length,2);assert.equal(x.states.at(-1)[0],'error');assert.equal(x.states.at(-1)[1].code,'timeout');x.player.cancel();});
+test('permission and output hardware errors are reported without cycling or rejecting healthy voices',()=>{for(const code of ['not-allowed','audio-hardware']){const x=setup();x.player.play('hello');x.calls[0].onerror({error:code});assert.equal(x.calls.length,1);assert.equal(x.states.at(-1)[1].code,code);assert.equal(x.player.failed.size,0);}});
+test('language filtering never selects a voice from another accent',()=>assert.deepEqual(matchingVoices([online,{name:'UK',lang:'en-GB',localService:true}], 'en-US'),[online]));

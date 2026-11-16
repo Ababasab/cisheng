@@ -1,0 +1,8 @@
+qa/
+__pycache__/
+*.tar.gz
+*.tar
+data-cache/
+
+# Local publishing handoff
+继续发布.md

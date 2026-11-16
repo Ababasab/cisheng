@@ -1,0 +1,14 @@
+{
+  "dictionaryEntries": 758516,
+  "commonEntries": 36890,
+  "sources": [
+    {
+      "url": "https://raw.githubusercontent.com/skywind3000/ECDICT/master/ecdict.csv",
+      "sha256": "d1ecbdf9ee2b920afb6f430ca6b6bb9f559588cf0dff86e04bd255f9390843cc"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/skywind3000/ECDICT/master/LICENSE",
+      "sha256": "f8552dd246f61a4e064569eae6194a01c6b3d63b03bf27c6ca863593c549ed0f"
+    }
+  ]
+}
