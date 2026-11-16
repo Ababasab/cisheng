@@ -1,15 +1,13 @@
 # GitHub Pages 发布
 
-本目录准备为独立公开仓库，建议名为 cisheng。尚未创建远端仓库或部署新网址。
+- 公开仓库：https://github.com/Ababasab/cisheng
+- Pages 地址：https://ababasab.github.io/cisheng/
+- 发布来源：GitHub Actions；工作流为 `.github/workflows/pages.yml`。
 
-1. 所有者安装 GitHub 集成并授权自己的账户，不在聊天中发送密码、令牌或验证码。
-2. 创建公开仓库，推送本目录到 main 分支；不要推送旧站点的 .git、.openai、data-cache 或 qa。
-3. 仓库 Settings → Pages → Build and deployment → Source 选择 GitHub Actions。
-4. 检查 Actions 中 Publish Word Notes to GitHub Pages 工作流成功，使用部署返回的真实 Pages 链接。
-5. 用手机关闭 VPN 测试该链接；未实测前不保证国内网络直连。
+在独立项目目录修改应用后，先执行 `node --test tests/*.test.js`，然后提交并推送 `main`。检查仓库 Actions 中 `Publish Word Notes to GitHub Pages` 的最新运行成功后，再验证网页。工作流仅上传 `dist` 静态产物。
 
-工作流仅上传 dist 静态产物，不上传测试或源数据下载缓存。旧站保持运行。
-单词和文件夹存储按浏览器域名隔离，换域名不会自动带过去，请先导出旧文件夹。
-如工作流使用 setup 前不存在系统 Node，需配置 Node 22+；GitHub 托管 ubuntu-latest 通常预装 Node。
+旧站点继续保留。单词和文件夹按浏览器与网站域名分别保存，切换到 Pages 前请先在旧站逐文件夹导出 TXT。新站通过“直接输入 / 粘贴单词”导入；TXT 不包含归档和发音设置。
 
-官方工作流参考：https://github.com/actions/starter-workflows/blob/main/pages/static.yml
+请用手机关闭 VPN，分别通过移动网络和 Wi-Fi 测试新地址；部署成功不代表所有国内网络均能直连。额外 Tatoeba 例句依赖外部网络，实际发音取决于设备语音能力。
+
+本机若 Git 不能自动使用 Windows 代理，可在单次推送时传入与系统设置相同的 `http.proxy` 参数。GitHub CLI 负责仓库与 Pages 管理；现有 GitHub 连接器可提交工作流。不要在仓库中保存登录凭据、本地词汇、截图或缓存。
