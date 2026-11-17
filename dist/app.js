@@ -5,7 +5,7 @@ import {migrateFolders,folderWords,addToFolder,folderName} from './folders.js';
 import {SpeechPlayer,matchingVoices,voiceId} from './speech.js';
 import {OcrWorker,loadingProgress} from './ocr.js';
 import {documentType,extractFileEntries} from './file-words.js';
-import {ReadingQueue,readingList} from './reading.js';
+import {ReadingQueue,readingList,numberedWords} from './reading.js';
 const $ = id => document.getElementById(id);
 const KEY = 'word-notes-v1';
 let words = [], accent = 'en-US', rate = .9, worker = null, ocrRun = 0, editing = null, playing = null, previewURL = null;
@@ -57,8 +57,7 @@ function updateReadingControls(state=readingQueue.snapshot()){
  $('reading-now').hidden=!state.active;
  if(state.active){$('reading-current-number').textContent=`${state.current.number}.`;$('reading-current-word').textContent=state.current.text;$('reading-current-label').textContent=state.status==='waiting'?'刚刚读完':readingSpeechPhase==='speaking'?'正在朗读':readingSpeechPhase==='retry'?'正在切换声音':'准备朗读';}
  $('reading-progress').textContent=state.active?`连读进度 ${state.index+1} / ${state.total}`:state.status==='complete'?`连读完成 · 共 ${state.total} 个单词`:state.status==='error'?'连读已停止，请检查上方声音提示后重试。':state.status==='stopped'?`已停止连读${state.total?` · ${Math.min(state.index+1,state.total)} / ${state.total}`:''}`:'选择顺读、倒读，或输入编号范围。';
- let max=0;for(const word of current)max=Math.max(max,word.number);
- $('reading-number-info').textContent=max?`当前文件夹最大编号：${max}。删除后其余编号不变。`:'添加单词后自动分配编号。';
+ $('reading-number-info').textContent=current.length?`当前按${$('sort').value==='az'?'字母排序':'录入顺序'}编号：1-${current.length}。搜索时保留该编号。`:'添加单词后按当前排序显示编号。';
 }
 function startReading(mode){
  $('reading-error').textContent='';
@@ -169,14 +168,14 @@ function render() {
  const folder=currentFolder(),current=folderWords(words,activeFolderId),archived=folder?.archived===true;
  renderFolders();$('folder-title').textContent=folder?.name||'选择或新建文件夹';$('archived-banner').hidden=!archived;
  $('count').textContent = current.length;$('clear').disabled=!current.length||archived;$('export').disabled=!current.length;
- const shown = visibleWords(current,$('search').value,$('sort').value);
+ const shown = visibleWords(numberedWords(current,$('sort').value),$('search').value,'original');
  $('empty').hidden=current.length>0; $('no-results').hidden=!current.length||shown.length>0;
  $('empty-title').textContent=folder?'下一次遇到生词，点一下就会读':'给这一组新单词起个名字';
  const frag=document.createDocumentFragment(),rowsById=new Map();
  shown.forEach(w=>{
   const row=document.createElement('div');row.className='word-row'+(playing===w.id?' playing':'');row.dataset.wordId=w.id;
   const summary=element('div','word-summary');
-  const number=document.createElement('span');number.className='word-number';number.textContent=`${w.number}.`;number.title='固定录入编号';row.dataset.wordNumber=String(w.number);
+  const number=document.createElement('span');number.className='word-number';number.textContent=`${w.number}.`;number.title='当前排序编号';row.dataset.wordNumber=String(w.number);
   const text=document.createElement('span');text.className='word-text';text.textContent=w.text;
   const main=element('div','word-main');main.append(text,element('span','ipa','加载音标…'));
   const meaning=element('div','word-meaning'),meaningBody=element('div','meaning-body');meaningBody.hidden=hiddenChinese(w.id);

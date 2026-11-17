@@ -1,18 +1,23 @@
 import {visibleWords} from './words.js';
 
+export function numberedWords(words,sort='az'){
+ return visibleWords(words,'',sort).map((word,index)=>({...word,number:index+1}));
+}
+
 export function readingList(words,{mode='forward',query='',sort='az',range=''}={}){
  if(!words.length)throw Error('这个文件夹还没有单词，请先添加。');
+ const ordered=numberedWords(words,sort);
  if(mode==='range'){
   const match=range.trim().match(/^(\d+)\s*[-－–—]\s*(\d+)$/);
   if(!match)throw Error('请输入起止编号，例如 203-260。');
   const start=Number(match[1]),end=Number(match[2]);
   if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start<1||end<1)throw Error('单词编号必须是大于 0 的整数。');
-  const numbers=new Set(words.map(w=>w.number));
+  const numbers=new Set(ordered.map(w=>w.number));
   for(const number of [start,end])if(!numbers.has(number))throw Error(`编号 ${number} 不存在，请检查当前文件夹的单词编号。`);
   const direction=start<=end?1:-1,low=Math.min(start,end),high=Math.max(start,end);
-  return words.filter(w=>w.number>=low&&w.number<=high).sort((a,b)=>(a.number-b.number)*direction);
+  return ordered.filter(w=>w.number>=low&&w.number<=high).sort((a,b)=>(a.number-b.number)*direction);
  }
- const result=visibleWords(words,query,sort);
+ const result=visibleWords(ordered,query,'original');
  if(!result.length)throw Error('当前搜索结果没有单词，请先清空或修改搜索。');
  return mode==='reverse'?result.reverse():result;
 }

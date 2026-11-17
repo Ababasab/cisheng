@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ReadingQueue,readingList} from '../dist/reading.js';
+import {ReadingQueue,readingList,numberedWords} from '../dist/reading.js';
 import {migrateFolders,addToFolder} from '../dist/folders.js';
 import {SpeechPlayer} from '../dist/speech.js';
 const words=[{id:'z',text:'zoo',number:1},{id:'a',text:'apple',number:2},{id:'b',text:'banana',number:3}];
@@ -18,20 +18,28 @@ test('duplicate and invalid saved numbers are repaired while valid numbers are r
  const data=migrateFolders({words:[{id:'a',text:'apple',number:7},{id:'b',text:'banana',number:7},{id:'c',text:'cat',number:-1}]});
  assert.deepEqual(data.words.map(w=>w.number),[7,8,9]);assert.equal(data.folders[0].nextNumber,10);
 });
-test('forward/reverse follow selected display order and filter without mutating fixed numbers',()=>{
- assert.deepEqual(readingList(words).map(w=>w.number),[2,3,1]);
- assert.deepEqual(readingList(words,{mode:'reverse'}).map(w=>w.number),[1,3,2]);
+test('display numbering restarts at one for each sort and reading uses the same view numbers',()=>{
+ assert.deepEqual(numberedWords(words).map(w=>[w.text,w.number]),[['apple',1],['banana',2],['zoo',3]]);
+ assert.deepEqual(readingList(words).map(w=>w.number),[1,2,3]);
+ assert.deepEqual(readingList(words,{mode:'reverse'}).map(w=>[w.text,w.number]),[['zoo',3],['banana',2],['apple',1]]);
  assert.deepEqual(readingList(words,{sort:'original'}).map(w=>w.number),[1,2,3]);
- assert.deepEqual(readingList(words,{query:'a'}).map(w=>w.number),[2,3]);
+ assert.deepEqual(readingList(words,{sort:'original'}).map(w=>w.text),['zoo','apple','banana']);
+ assert.deepEqual(readingList(words,{query:'a'}).map(w=>w.number),[1,2]);
  assert.deepEqual(words.map(w=>w.number),[1,2,3]);
 });
-test('203-260 is inclusive and independent of display sorting, with reversed ranges supported',()=>{
+test('range uses current sorted positions, not stored import numbers, and search preserves full-list numbers',()=>{
+ assert.deepEqual(readingList(words,{mode:'range',range:'1-2'}).map(w=>w.text),['apple','banana']);
+ assert.deepEqual(readingList(words,{mode:'range',range:'1-2',sort:'original'}).map(w=>w.text),['zoo','apple']);
+ assert.deepEqual(readingList(words,{query:'z'}).map(w=>[w.text,w.number]),[['zoo',3]]);
+ const deleted=words.filter(w=>w.id!=='a');assert.deepEqual(numberedWords(deleted).map(w=>[w.text,w.number]),[['banana',1],['zoo',2]]);
+ assert.deepEqual(readingList(deleted,{mode:'range',range:'1-2'}).map(w=>w.text),['banana','zoo']);
+});
+test('203-260 includes both endpoints, with reversed ranges supported',()=>{
  const many=Array.from({length:300},(_,i)=>({id:String(i),text:'word',number:i+1}));
  const result=readingList(many,{mode:'range',range:'203-260',query:'no-match',sort:'az'});
  assert.equal(result.length,58);assert.equal(result[0].number,203);assert.equal(result.at(-1).number,260);
  assert.deepEqual(readingList(words,{mode:'range',range:' 3－1 '}).map(w=>w.number),[3,2,1]);
  assert.equal(readingList(words,{mode:'range',range:'2-2'}).length,1);
- const deleted=words.filter(w=>w.number!==2);assert.deepEqual(readingList(deleted,{mode:'range',range:'1-3'}).map(w=>w.number),[1,3]);
 });
 test('bad ranges, missing endpoints and empty search results do not produce an unintended batch',()=>{
  for(const range of ['','203','1-4','0-2','-1-2','1.5-2','2-3-4','9007199254740999-2'])assert.throws(()=>readingList(words,{mode:'range',range}));
