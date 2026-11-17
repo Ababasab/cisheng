@@ -26,6 +26,7 @@ with sync_playwright() as p:
  f.route('**/data/common/**',lambda route:route.abort());f.route('**/data/dict-*.json',lambda route:route.abort())
  f.goto(url);f.locator('#manual').click();f.locator('#review-text').fill('concert');f.locator('#save-review').click()
  expect(f.locator('.ipa')).to_have_text('音标加载失败',timeout=15000);expect(f.locator('.retry-definition')).to_be_visible()
+ f.locator('#toggle-all-chinese').click();expect(f.locator('.retry-definition')).to_be_visible()
  f.unroute('**/data/common/**');f.unroute('**/data/dict-*.json');f.locator('.retry-definition').click();expect(f.locator('.ipa')).to_have_text(re.compile('^/.+/$'),timeout=20000)
  # A never-settling network must exit loading within the bounded two-route deadline.
  hung=b.new_context();h=hung.new_page();h.add_init_script("const orig=fetch;window.fetch=(url,opts)=>String(url).includes('/data/common/')||String(url).includes('/data/dict-')?new Promise(()=>{}):orig(url,opts)")

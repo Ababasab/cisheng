@@ -189,8 +189,8 @@ function render() {
   const main=element('div','word-main');main.append(text,element('span','ipa','加载音标…'));
   const meaning=element('div','word-meaning'),meaningBody=element('div','meaning-body');meaningBody.hidden=hiddenChinese(w.id);
   const meaningText=element('span','meaning-text','正在查释义…');meaningBody.append(meaningText);
-  const retry=element('button','retry-definition','重试');retry.hidden=true;retry.onclick=()=>enrich(w,true);meaningBody.append(retry);
-  const toggle=element('button','toggle-chinese',hiddenChinese(w.id)?'显示中文':'隐藏中文');toggle.setAttribute('aria-label',`${hiddenChinese(w.id)?'显示':'隐藏'} ${w.text} 的中文`);toggle.setAttribute('aria-pressed',String(hiddenChinese(w.id)));toggle.onclick=()=>{chineseOverrides.set(w.id,!hiddenChinese(w.id));persist();render();};meaning.append(meaningBody,toggle);
+  const retry=element('button','retry-definition','重试');retry.hidden=true;retry.onclick=()=>enrich(w,true);
+  const toggle=element('button','toggle-chinese',hiddenChinese(w.id)?'显示中文':'隐藏中文');toggle.setAttribute('aria-label',`${hiddenChinese(w.id)?'显示':'隐藏'} ${w.text} 的中文`);toggle.setAttribute('aria-pressed',String(hiddenChinese(w.id)));toggle.onclick=()=>{chineseOverrides.set(w.id,!hiddenChinese(w.id));persist();render();};meaning.append(meaningBody,retry,toggle);
   const edit=document.createElement('button');edit.className='edit';edit.textContent='编辑';edit.setAttribute('aria-label',`编辑 ${w.text}`);edit.onclick=()=>openReview(w.text,w.id);
   edit.disabled=archived;
   const play=document.createElement('button');play.className='speak';play.innerHTML=speaker;play.setAttribute('aria-label',`朗读 ${w.text}`);play.onclick=()=>speak(w);
