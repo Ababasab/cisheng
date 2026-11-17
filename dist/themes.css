@@ -82,6 +82,18 @@ main a { color: var(--theme-accent, #244f42); }
 .file-review textarea { height: 180px; min-height: 110px; }
 .reading-controls { margin: 0 28px 20px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--theme-soft, #f7faf2); }
 .reading-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.reading-heading h3 { margin-right: auto; }
+.help-drawer { font-size: 11px; color: var(--muted); line-height: 1.8; margin-top: 12px; }
+.help-drawer>summary { cursor: pointer; width: fit-content; }
+.help-drawer p { line-height: 1.8; }
+.help-drawer small { display: block; }
+.voice-info { margin: 6px 28px 12px; }
+.voice-info .voice-status { margin: 8px 0; }
+.study-toolbar .help-drawer,.notebook-footer .help-drawer { margin-top: 0; }
+.sidebar-help { padding: 4px 12px; }
+.sources-help { margin-top: 20px; }
+.section-label,.eyebrow,.device-note,.brand-en,.intro>p,#folder-total { display: none; }
+@media(max-width:650px){.voice-info{margin-left:20px;margin-right:20px}.reading-heading{flex-wrap:wrap}}
 .reading-heading h3 { font-size: 13px; font-weight: 600; margin: 0; }
 .reading-controls .quiet { font-size: 11px; padding: 8px 11px; }
 .reading-directions { display: flex; gap: 8px; margin: 12px 0; }

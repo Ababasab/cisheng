@@ -19,10 +19,10 @@ with sync_playwright() as p:
     page.get_by_role('button',name='朗读 apple',exact=True).click()
     page.wait_for_timeout(100)
     assert page.evaluate('window.__spoken[0].lang')=='en-US'
-    page.locator('#uk').click();page.locator('#speed').select_option('0.7')
+    page.locator('#uk').click();page.locator('#speed').select_option('0.75')
     page.get_by_role('button',name='朗读 apple',exact=True).click();page.wait_for_timeout(100)
     assert page.evaluate('window.__spoken.at(-1).lang')=='en-GB'
-    assert page.evaluate('window.__spoken.at(-1).rate')==0.7
+    assert page.evaluate('window.__spoken.at(-1).rate')==0.75
     page.reload(); assert page.locator('#count').inner_text()=='3'
     assert page.locator('#uk').get_attribute('aria-pressed')=='true'
     page.locator('#sort').select_option('original');assert page.locator('.word-text').first.inner_text()=='Zoo'

@@ -68,3 +68,12 @@ test('stopping between words or restarting prevents stale completion from starti
 test('fatal speech failure stops the batch without silently skipping a word',async t=>{
  const x=setup();t.after(()=>x.queue.stop());x.queue.start(words);x.calls[0].onerror({error:'audio-hardware'});await wait(30);assert.equal(x.queue.status,'error');assert.equal(x.calls.length,1);
 });
+test('resume repeats an interrupted word, skips a finished word and cannot resume after completion/reset',async t=>{
+ const x=setup();t.after(()=>x.queue.stop());x.queue.start(words);const old=x.calls[0];
+ x.queue.stop();assert.equal(x.queue.canResume,true);x.queue.resume();assert.equal(x.calls.at(-1).text,'zoo');
+ old.onend();assert.equal(x.queue.index,0);
+ x.calls.at(-1).onend();x.queue.stop();x.queue.stop();x.queue.resume();assert.equal(x.calls.at(-1).text,'apple');
+ x.calls.at(-1).onend();await until(()=>x.calls.at(-1).text==='banana');x.calls.at(-1).onend();
+ x.queue.stop();assert.equal(x.queue.canResume,false);const count=x.calls.length;x.queue.resume();assert.equal(x.calls.length,count);
+ x.queue.start(words);x.queue.stop();x.queue.reset();assert.equal(x.queue.canResume,false);
+});

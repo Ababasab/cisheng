@@ -19,8 +19,8 @@ with sync_playwright() as p:
  expect(passport.locator('.sentence-zh').first).to_be_visible()
  passport.locator('.sentence-speak').first.click();page.wait_for_timeout(100);assert page.evaluate('__spoken.at(-1).text')==before[0]
  assert page.evaluate('__spoken.at(-1).lang')=='en-US'
- page.locator('#uk').click();page.locator('#speed').select_option('0.7');passport.locator('.sentence-speak').first.click();page.wait_for_timeout(100)
- assert page.evaluate('__spoken.at(-1).lang')=='en-GB';assert page.evaluate('__spoken.at(-1).rate')==0.7
+ page.locator('#uk').click();page.locator('#speed').select_option('0.75');passport.locator('.sentence-speak').first.click();page.wait_for_timeout(100)
+ assert page.evaluate('__spoken.at(-1).lang')=='en-GB';assert page.evaluate('__spoken.at(-1).rate')==0.75
  passport.locator('.generate-example').click();expect(passport.locator('.generate-example')).to_be_enabled();after=passport.locator('.sentence-en').all_text_contents();assert not set(before)&set(after),(before,after)
  page.locator('#toggle-all-chinese').click()
  assert page.locator('.meaning-body:visible').count()==0;assert page.locator('.sentence-zh:visible').count()==0

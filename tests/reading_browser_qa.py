@@ -36,9 +36,9 @@ with sync_playwright() as p:
  old=page.evaluate('__utterances.length-1');page.get_by_role('button',name='朗读 banana',exact=True).click()
  expect(page.locator('#stop-reading')).to_be_disabled();assert page.evaluate('__spoken.at(-1).text')=='banana'
  page.evaluate(f'__utterances[{old}].onend()');page.evaluate('__finish()');before=page.evaluate('__spoken.length');page.wait_for_timeout(450);assert page.evaluate('__spoken.length')==before
- page.locator('#uk').click();page.locator('#speed').select_option('0.7')
+ page.locator('#uk').click();page.locator('#speed').select_option('0.75')
  page.locator('#reading-range').fill('2-3');page.locator('#read-range').click();current('apple',2)
- assert page.evaluate('__spoken.at(-1)')=={'text':'apple','lang':'en-GB','rate':.7}
+ assert page.evaluate('__spoken.at(-1)')=={'text':'apple','lang':'en-GB','rate':.75}
  page.evaluate('__finish()');current('banana',3);page.evaluate('__finish()');expect(page.locator('#reading-progress')).to_contain_text('连读完成')
  for bad in ['abc','0-2','1-4']:
   before=page.evaluate('__spoken.length');page.locator('#reading-range').fill(bad);page.locator('#read-range').click();expect(page.locator('#reading-error')).to_be_visible();assert page.evaluate('__spoken.length')==before
