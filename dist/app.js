@@ -1,4 +1,4 @@
-import { cleanEntries, extractWords, extractHeadwords, visibleWords } from './words.js';
+import { cleanEntries, extractWords, extractHeadwords, visibleWords,parseEntryInput } from './words.js';
 import { findGutter, headwordInset } from './layout.js';
 import { lookupWord, loadExamples, pickExamples } from './learning.js';
 import {migrateFolders,folderWords,addToFolder,folderName} from './folders.js';
@@ -201,16 +201,22 @@ function selectAccent(value) { stop();accent=value;$('us').classList.toggle('sel
 $('us').onclick=()=>selectAccent('en-US');$('uk').onclick=()=>selectAccent('en-GB');
 const rates=[...new Set([...SPEECH_RATES,rate])].sort((a,b)=>a-b);$('speed').replaceChildren(...rates.map(value=>{const option=element('option','',`${value}×`);option.value=String(value);return option;}));$('speed').value=String(rate);$('speed').onchange=()=>{stop();rate=Number($('speed').value);persist();};
 $('search').oninput=$('sort').onchange=()=>{readingQueue.reset();render();};
+function updateReviewSummary(){
+ const {entries,invalid}=parseEntryInput($('review-text').value);
+ $('review-input-summary').textContent=$('review-text').value.trim()?`已识别 ${entries.length} 个词条${invalid.length?`，${invalid.length} 项需要修改`:'，重复项已自动合并'}。`:'';
+ $('review-input-error').textContent='';
+}
+$('review-text').addEventListener('input',updateReviewSummary);
 function openReview(text='',id=null,ocr=false,targetFolderId=activeFolderId) {
  if(readingQueue.active)stop();
  fileReview=null;$('file-review-options').hidden=true;$('review').classList.remove('file-review');
- editing=id;$('review-title').textContent=id?'修改单词':ocr?'校对识别结果':'添加单词';$('review-tip').textContent=ocr?'请删掉音标、页眉和多余内容，修正识别有误的单词。识别出的短语可能被拆开，可手动合并。':'每行填写一个英文单词或短语；在所选文件夹中自动去重。';
+ editing=id;$('review-title').textContent=id?'修改单词':ocr?'校对识别结果':'添加单词';$('review-tip').textContent=ocr?'请删掉音标、页眉和多余内容，修正识别有误的单词。识别出的短语可能被拆开，可手动合并。':'支持顿号、中英文逗号、分号或换行分隔，空格保留为短语；在所选文件夹中自动去重。';
  $('review-destination').hidden=!!id;$('destination-folder').replaceChildren();
  for(const folder of folders.filter(f=>!f.archived)){const option=element('option','',folder.name);option.value=folder.id;$('destination-folder').append(option);}
  const create=element('option','','＋ 新建文件夹并添加');create.value='__new__';$('destination-folder').append(create);
  $('destination-folder').value=folders.some(f=>f.id===targetFolderId&&!f.archived)?targetFolderId:folders.find(f=>!f.archived)?.id||'__new__';
  $('destination-name').value='';$('destination-name-wrap').hidden=$('destination-folder').value!=='__new__';$('review-error').textContent='';
- $('review-text').value=text;$('review').showModal();$('review-text').focus();$('review-text').setSelectionRange(0,0);$('review-text').scrollTop=0;
+ $('review-text').value=text;updateReviewSummary();$('review').showModal();$('review-text').focus();$('review-text').setSelectionRange(0,0);$('review-text').scrollTop=0;
 }
 $('destination-folder').onchange=()=>{$('destination-name-wrap').hidden=$('destination-folder').value!=='__new__';$('review-error').textContent='';if($('destination-folder').value==='__new__')$('destination-name').focus();};
 $('destination-name').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();$('save-review').click();}});
@@ -227,9 +233,9 @@ function updateFileReview(){
  if(!fileReview)return;
  try{
   const entries=extractFileEntries(fileReview.sources,{source:$('file-source').value,column:$('file-column-wrap').hidden?'all':$('file-column').value,mode:$('file-mode').value});
-  $('review-text').value=entries.join('\n');
+  $('review-text').value=entries.join('\n');updateReviewSummary();
   $('file-summary').textContent=`提取到 ${entries.length} 个词条，已去重${fileReview.scannedPages?`；${fileReview.scannedPages} 页使用图片识别`:''}。${entries.length?'可在下方修改后添加。':'请换一列或提取方式，再检查文件内容。'}`;
- }catch(error){$('review-text').value='';$('file-summary').textContent=error.message;}
+ }catch(error){$('review-text').value='';updateReviewSummary();$('file-summary').textContent=error.message;}
 }
 $('file-source').onchange=()=>{updateFileColumns();updateFileReview();};
 $('file-column').onchange=$('file-mode').onchange=updateFileReview;
@@ -257,10 +263,10 @@ async function importDocument(file){
  finally{if(documentAbort===controller){documentAbort=null;$('import-document').disabled=false;$('document-loading').close();}}
 }
 $('save-review').onclick=()=>{
- const raw=$('review-text').value.split(/\r?\n/).filter(s=>s.trim());const entries=cleanEntries($('review-text').value);
- if(!entries.length)return notice('请填写英文单词或短语，每行一项。');
- const invalid=raw.filter(s=>!cleanEntries(s).length);if(invalid.length)return notice(`有 ${invalid.length} 行包含数字、音标或非英文字母，请修改后再保存。`);
- if(editing && entries.length!==1)return notice('编辑时请保留一行；添加多个单词请使用“直接输入”。');
+ const {entries,invalid}=parseEntryInput($('review-text').value);
+ if(!entries.length)return $('review-input-error').textContent='请填写英文单词或短语，可用顿号、逗号或换行分隔。';
+ if(invalid.length)return $('review-input-error').textContent=`有 ${invalid.length} 项包含数字、音标或非英文字母，请修改后再保存。`;
+ if(editing && entries.length!==1)return $('review-input-error').textContent='编辑时请只保留一个词条；添加多个单词请使用“直接输入”。';
  if(editing){const w=words.find(w=>w.id===editing);if(!w||folders.find(f=>f.id===w.folderId)?.archived)return notice('请先恢复文件夹再编辑。');if(words.some(other=>other.id!==editing&&other.folderId===w.folderId&&other.text.toLowerCase()===entries[0].toLowerCase()))return notice('这个文件夹中已经有这个单词。');w.text=entries[0];readingQueue.reset();playing=null;}
  else {
   let target=$('destination-folder').value;

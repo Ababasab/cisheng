@@ -1,3 +1,11 @@
+export function splitEntryInput(text) {
+ const numbered=text.replace(/(^|[,，;；\r\n\t])\s*\d+\s*[.、)]\s*(?=[A-Za-z])/g,'$1');
+ return numbered.split(/[,，、;；\r\n\t]+/).map(s=>s.trim()).filter(Boolean);
+}
+export function parseEntryInput(text) {
+ const parts=splitEntryInput(text);
+ return {entries:cleanEntries(parts.join('\n')),invalid:parts.filter(part=>!cleanEntries(part).length)};
+}
 export function cleanEntries(text) {
  const seen = new Set();
  return text.split(/\r?\n/).map(s => s.trim().replace(/[’‘]/g, "'").replace(/^[\d.、)\s•·-]+/, '').replace(/\s+/g, ' ')).filter(s => {

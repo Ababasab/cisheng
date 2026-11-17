@@ -1,6 +1,17 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {cleanEntries,extractWords,extractHeadwords,visibleWords} from '../dist/words.js';
+import {cleanEntries,extractWords,extractHeadwords,visibleWords,parseEntryInput} from '../dist/words.js';
+
+test('manual vocabulary lists split Chinese and English separators while preserving phrases',()=>{
+ assert.deepEqual(parseEntryInput('theatre、 concert、 musician、 gallery').entries,['theatre','concert','musician','gallery']);
+ assert.deepEqual(parseEntryInput("Apple，apple;look forward to；it’s\twell-known\r\nbanana,,、;").entries,['Apple','look forward to',"it's",'well-known','banana']);
+ assert.deepEqual(parseEntryInput('look forward to').entries,['look forward to']);
+ assert.deepEqual(parseEntryInput('1、apple\n2. look forward to，3、banana').entries,['apple','look forward to','banana']);
+});
+test('invalid list segments stay visible for correction and never silently disappear',()=>{
+ assert.deepEqual(parseEntryInput('apple、中文，banana;abc123').invalid,['中文','abc123']);
+ assert.deepEqual(parseEntryInput('、、,;；\n\t'),{entries:[],invalid:[]});
+});
 test('deduplicate without changing phrases, contractions or case',()=>assert.deepEqual(cleanEntries("Apple\napple\nlook forward to\nit’s\nwell-known\n中文\n<svg>\n"),['Apple','look forward to',"it's",'well-known']));
 test('remove IPA and Chinese, keep words in reading order',()=>assert.equal(extractWords('1. apple /ˈæpl/ 苹果\n2. banana [bəˈnɑːnə] 香蕉'), 'apple\nbanana'));
 test('sorting never mutates import order; search ignores case',()=>{const w=[{text:'Zoo'},{text:'apple'},{text:'banana'}];assert.deepEqual(visibleWords(w,'','az').map(w=>w.text),['apple','banana','Zoo']);assert.equal(w[0].text,'Zoo');assert.equal(visibleWords(w,'APP','original')[0].text,'apple');});
