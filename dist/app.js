@@ -84,6 +84,15 @@ const speaker = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4
 const hiddenChinese=id=>chineseOverrides.has(id)?chineseOverrides.get(id):hideAllChinese;
 const element=(tag,className,text)=>{const e=document.createElement(tag);if(className)e.className=className;if(text!==undefined)e.textContent=text;return e;};
 const observer=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){const w=words.find(w=>w.id===entry.target.dataset.wordId);if(w)enrich(w);observer.unobserve(entry.target);}},{root:$('word-list'),rootMargin:'120px'});
+let definitionFrame=null;
+function ensureVisibleDefinitions(){
+ const list=$('word-list'),rows=list.children,box=list.getBoundingClientRect();if(!rows.length||!box.height)return;
+ let low=0,high=rows.length;
+ while(low<high){const mid=(low+high)>>1;if(rows[mid].getBoundingClientRect().bottom<box.top-120)low=mid+1;else high=mid;}
+ for(let i=low;i<rows.length&&i<low+20;i++){const row=rows[i];if(row.getBoundingClientRect().top>box.bottom+120)break;const word=words.find(w=>w.id===row.dataset.wordId);if(word&&!definitions.has(word.text.toLowerCase()))enrich(word);}
+}
+$('word-list').addEventListener('scroll',()=>{if(definitionFrame===null)definitionFrame=requestAnimationFrame(()=>{definitionFrame=null;ensureVisibleDefinitions();});},{passive:true});
+window.addEventListener('online',()=>{for(const [key,state] of definitions)if(state.status==='error')definitions.delete(key);ensureVisibleDefinitions();});
 async function enrich(w,retry=false){
  const key=w.text.toLowerCase();let state=definitions.get(key);
  if(state&&!retry){paintDefinition(w);return;}
@@ -94,7 +103,7 @@ async function enrich(w,retry=false){
 function paintDefinition(w,row=null){
  row ||= $('word-list').querySelector(`[data-word-id="${CSS.escape(w.id)}"]`);if(!row)return;
  const state=definitions.get(w.text.toLowerCase());const ipa=row.querySelector('.ipa'),meaning=row.querySelector('.meaning-text'),retry=row.querySelector('.retry-definition');
- ipa.textContent=state?.data?.ipa?`/${state.data.ipa.replace(/^\[|\]$/g,'')}/`:state?.status==='loading'?'加载音标…':'暂无音标';
+ ipa.textContent=state?.data?.ipa?`/${state.data.ipa.replace(/^\[|\]$/g,'')}/`:state?.status==='loading'?'加载音标…':state?.status==='error'?'音标加载失败':'暂无音标';
  ipa.title='词典参考音标，以英式为主；朗读使用上方选择的口音。';
  meaning.textContent=state?.data?.zh|| (state?.status==='error'?'词典加载失败':state?.status==='missing'?'词典暂未收录，请检查拼写':'正在查释义…');
  retry.hidden=state?.status!=='error';
@@ -194,7 +203,7 @@ function render() {
  });$('word-list').replaceChildren(frag);
  for(const w of shown){const row=rowsById.get(w.id);if(definitions.has(w.text.toLowerCase()))paintDefinition(w,row);else observer.observe(row);}
  $('toggle-all-chinese').textContent=hideAllChinese?'显示全部中文':'隐藏全部中文';$('toggle-all-chinese').setAttribute('aria-pressed',String(hideAllChinese));
- updateReadingControls();paintPlaying();
+ updateReadingControls();paintPlaying();ensureVisibleDefinitions();
 }
 $('toggle-all-chinese').onclick=()=>{hideAllChinese=!hideAllChinese;chineseOverrides.clear();persist();render();};
 function selectAccent(value) { stop();accent=value;$('us').classList.toggle('selected',value==='en-US');$('uk').classList.toggle('selected',value==='en-GB');$('us').setAttribute('aria-pressed',String(value==='en-US'));$('uk').setAttribute('aria-pressed',String(value==='en-GB'));updateVoice();persist(); }

@@ -1,13 +1,6 @@
-const dictRequests=new Map();let seedRequest,commonRequest;
-export function dictionaryKey(word){return (word.toLowerCase()+'__').slice(0,2).replace(/[^a-z]/g,'_');}
+let seedRequest;
+export {dictionaryKey,lookupWord} from './dictionary.js';
 async function json(url){const response=await fetch(url,{signal:AbortSignal.timeout(30000)});if(!response.ok)throw Error('数据暂时不可用，请稍后重试');return response.json();}
-export async function lookupWord(text){
- const word=text.toLowerCase(),key=dictionaryKey(word);
- if(!commonRequest)commonRequest=json('./data/dict-common.json').catch(e=>{commonRequest=null;throw e;});
- const common=await commonRequest;if(Object.hasOwn(common,word))return common[word];
- if(!dictRequests.has(key))dictRequests.set(key,json(`./data/dict-${key}.json`).catch(e=>{dictRequests.delete(key);throw e;}));
- const entries=await dictRequests.get(key);return Object.hasOwn(entries,word)?entries[word]:null;
-}
 export function exampleTerms(word,forms=''){
  return [...new Set([word.toLowerCase(),...forms.split('/').filter(s=>/^[pdi3srt]:/.test(s)).flatMap(s=>s.slice(2).split(','))])].filter(Boolean);
 }

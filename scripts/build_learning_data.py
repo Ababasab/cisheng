@@ -28,3 +28,7 @@ for c,bucket in buckets.items():(OUT/f'dict-{c}.json').write_text(json.dumps(buc
 manifest={'dictionaryEntries':sum(map(len,buckets.values())),'commonEntries':len(common),'sources':[{'url':url,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p,(_,url) in zip(files,sources)]}
 (OUT/'manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
 print({k:v for k,v in manifest.items() if k!='sources'},flush=True)
+
+# Keep the mobile lookup shards in sync whenever source dictionary data is rebuilt.
+import runpy
+runpy.run_path(str(ROOT/"scripts/split_common_dictionary.py"))

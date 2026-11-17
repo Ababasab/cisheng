@@ -45,3 +45,13 @@
 手动添加/粘贴支持中文顿号、中文/英文逗号、中文/英文分号、换行和制表符分隔。例如 `theatre、concert、musician、gallery` 可直接识别为四项；普通空格保留为短语，不拆开 `look forward to`。输入时显示去重后的识别数；含无效字符的项会阻止保存并在弹窗内提示，编辑已有词时仍只允许一个词条。
 
 新增 splitEntryInput / parseEntryInput 用于输入框，底层 cleanEntries 的单行校验不变，避免影响词典、文档读取和旧数据迁移。使用原有文件夹选择、去重、编号及存储逻辑。测试：tests/words.test.js 和 tests/manual_lists_qa.py（支持 QA_URL）。
+
+## 手机音标与词典加载
+
+lookupWord 改由 dist/dictionary.js 实现。常用词按前两字母从 data/common/ 的小 JSON 按需读取，缺词或分片加载失败时再读原有完整分片，不再先下载 4 MB dict-common.json。原 common 大文件保留作为数据源/构建兼容，运行时不请求它。
+
+每条查询成功的结果缓存到独立 localStorage key word-notes-dictionary-v1，最多 3000 词，100ms 防抖保存、pagehide 刷盘；存储被禁用或写入失败不影响在线查询。fetch 与 JSON 读取受显式 10 秒超时控制，每条查询最多尝试常用与完整两个分片；失败移除请求缓存，可重试，联网恢复自动重试当前可见词。theatre 缺失的音标仅在缺失时参考同义拼写 theater，保留原词义及词形。
+
+IntersectionObserver 之外，初次渲染与滚动也主动加载列表可见行，最多预读附近 20 行；失败明确显示音标/词典加载失败和重试按钮。
+
+scripts/split_common_dictionary.py 可从现有 common 数据重建 702 个分片，原构建脚本也调用此步骤。新增 tests/dictionary.test.js 和 tests/dictionary_mobile_qa.py，后者支持 QA_URL，验证截图四词、观察器失效、断网缓存、失败重试、完全挂起请求超时及手机布局。
