@@ -3,7 +3,7 @@ import {visibleWords} from './words.js';
 export function numberedWords(words,sort='az'){
  return visibleWords(words,'',sort).map((word,index)=>({...word,number:index+1}));
 }
-export const SPEECH_RATES=[0.5,0.75,1,1.25,1.5,1.75,2];
+export const SPEECH_RATES=[0.1,0.2,0.25,0.5,0.75,1,1.25,1.5,1.75,2];
 
 export function readingList(words,{mode='forward',query='',sort='az',range=''}={}){
  if(!words.length)throw Error('这个文件夹还没有单词，请先添加。');
