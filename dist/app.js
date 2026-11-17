@@ -4,6 +4,7 @@ import { lookupWord, loadExamples, pickExamples } from './learning.js';
 import {migrateFolders,folderWords,addToFolder,folderName} from './folders.js';
 import {SpeechPlayer,matchingVoices,voiceId} from './speech.js';
 import {OcrWorker,loadingProgress} from './ocr.js';
+import {documentType,extractFileEntries} from './file-words.js';
 const $ = id => document.getElementById(id);
 const KEY = 'word-notes-v1';
 let words = [], accent = 'en-US', rate = .9, worker = null, ocrRun = 0, editing = null, playing = null, speechRun = 0, previewURL = null;
@@ -11,6 +12,7 @@ let noticeTimer;
 let voicePreferences={};
 let folders=[],activeFolderId=null,editingFolderId=null,clearFolderId=null;
 let hideAllChinese=false;
+let documentAbort=null,fileReview=null;
 const chineseOverrides=new Map(),definitions=new Map(),exampleStates=new Map();
 function notice(text) { $('notice').textContent = text; $('notice').hidden = false; clearTimeout(noticeTimer); noticeTimer = setTimeout(() => $('notice').hidden = true, 5000); }
 try { const stored = JSON.parse(localStorage.getItem(KEY) || '{}')||{};({folders,words,activeFolderId}=migrateFolders(stored));if(['en-US','en-GB'].includes(stored.accent)) accent = stored.accent; if([.7,.9,1.1].includes(stored.rate)) rate=stored.rate; } catch {({folders,words,activeFolderId}=migrateFolders());notice('无法读取本地记录，请导出备份后继续使用。'); }
@@ -53,8 +55,8 @@ async function enrich(w,retry=false){
  try{state.data=await lookupWord(w.text);state.status=state.data?'ready':'missing';}catch{state.status='error';}
  for(const word of words)if(word.text.toLowerCase()===key)paintDefinition(word);
 }
-function paintDefinition(w){
- const row=$('word-list').querySelector(`[data-word-id="${CSS.escape(w.id)}"]`);if(!row)return;
+function paintDefinition(w,row=null){
+ row ||= $('word-list').querySelector(`[data-word-id="${CSS.escape(w.id)}"]`);if(!row)return;
  const state=definitions.get(w.text.toLowerCase());const ipa=row.querySelector('.ipa'),meaning=row.querySelector('.meaning-text'),retry=row.querySelector('.retry-definition');
  ipa.textContent=state?.data?.ipa?`/${state.data.ipa.replace(/^\[|\]$/g,'')}/`:state?.status==='loading'?'加载音标…':'暂无音标';
  ipa.title='词典参考音标，以英式为主；朗读使用上方选择的口音。';
@@ -133,7 +135,7 @@ function render() {
  const shown = visibleWords(current,$('search').value,$('sort').value);
  $('empty').hidden=current.length>0; $('no-results').hidden=!current.length||shown.length>0;
  $('empty-title').textContent=folder?'下一次遇到生词，点一下就会读':'给这一组新单词起个名字';
- const frag=document.createDocumentFragment();
+ const frag=document.createDocumentFragment(),rowsById=new Map();
  shown.forEach((w,i)=>{
   const row=document.createElement('div');row.className='word-row'+(playing===w.id?' playing':'');row.dataset.wordId=w.id;
   const summary=element('div','word-summary');
@@ -152,9 +154,9 @@ function render() {
   const actions=element('div','word-actions');actions.append(play,edit,remove);
   summary.append(number,main,meaning,actions);row.append(summary);
   const state=exampleStates.get(w.text.toLowerCase()),generate=element('button','generate-example',state?.status==='loading'?'正在准备…':state?.status==='ready'?'换一组例句 ↻':'生成例句 ✧');generate.disabled=state?.status==='loading';generate.setAttribute('aria-label',`生成 ${w.text} 的例句`);generate.onclick=()=>generateExamples(w);row.append(generate);
-  paintExamples(w,row);frag.append(row);
+  paintExamples(w,row);frag.append(row);rowsById.set(w.id,row);
  });$('word-list').replaceChildren(frag);
- for(const w of shown){const row=$('word-list').querySelector(`[data-word-id="${CSS.escape(w.id)}"]`);paintDefinition(w);if(!definitions.has(w.text.toLowerCase()))observer.observe(row);}
+ for(const w of shown){const row=rowsById.get(w.id);if(definitions.has(w.text.toLowerCase()))paintDefinition(w,row);else observer.observe(row);}
  $('toggle-all-chinese').textContent=hideAllChinese?'显示全部中文':'隐藏全部中文';$('toggle-all-chinese').setAttribute('aria-pressed',String(hideAllChinese));
 }
 $('toggle-all-chinese').onclick=()=>{hideAllChinese=!hideAllChinese;chineseOverrides.clear();persist();render();};
@@ -163,6 +165,7 @@ $('us').onclick=()=>selectAccent('en-US');$('uk').onclick=()=>selectAccent('en-G
 $('speed').value=String(rate);$('speed').onchange=()=>{stop();rate=Number($('speed').value);persist();};
 $('search').oninput=render;$('sort').onchange=render;
 function openReview(text='',id=null,ocr=false,targetFolderId=activeFolderId) {
+ fileReview=null;$('file-review-options').hidden=true;$('review').classList.remove('file-review');
  editing=id;$('review-title').textContent=id?'修改单词':ocr?'校对识别结果':'添加单词';$('review-tip').textContent=ocr?'请删掉音标、页眉和多余内容，修正识别有误的单词。识别出的短语可能被拆开，可手动合并。':'每行填写一个英文单词或短语；在所选文件夹中自动去重。';
  $('review-destination').hidden=!!id;$('destination-folder').replaceChildren();
  for(const folder of folders.filter(f=>!f.archived)){const option=element('option','',folder.name);option.value=folder.id;$('destination-folder').append(option);}
@@ -174,6 +177,47 @@ function openReview(text='',id=null,ocr=false,targetFolderId=activeFolderId) {
 $('destination-folder').onchange=()=>{$('destination-name-wrap').hidden=$('destination-folder').value!=='__new__';$('review-error').textContent='';if($('destination-folder').value==='__new__')$('destination-name').focus();};
 $('destination-name').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();$('save-review').click();}});
 $('manual').onclick=()=>openReview();
+function updateFileColumns(){
+ const source=$('file-source').value,selected=fileReview.sources.filter((_,i)=>source==='all'||String(i)===source);
+ $('file-column-wrap').hidden=!selected.some(s=>s.type==='table');
+ $('file-column').replaceChildren();
+ for(const [value,label] of [['auto','自动选择英文词列'],['all','所有列']]){const option=element('option','',label);option.value=value;$('file-column').append(option);}
+ let width=0;for(const s of selected)for(const row of s.rows)width=Math.max(width,row.length);
+ for(let i=0;i<Math.min(width,100);i++){const option=element('option','',`第 ${i+1} 列`);option.value=String(i);$('file-column').append(option);}
+}
+function updateFileReview(){
+ if(!fileReview)return;
+ try{
+  const entries=extractFileEntries(fileReview.sources,{source:$('file-source').value,column:$('file-column-wrap').hidden?'all':$('file-column').value,mode:$('file-mode').value});
+  $('review-text').value=entries.join('\n');
+  $('file-summary').textContent=`提取到 ${entries.length} 个词条，已去重${fileReview.scannedPages?`；${fileReview.scannedPages} 页使用图片识别`:''}。${entries.length?'可在下方修改后添加。':'请换一列或提取方式，再检查文件内容。'}`;
+ }catch(error){$('review-text').value='';$('file-summary').textContent=error.message;}
+}
+$('file-source').onchange=()=>{updateFileColumns();updateFileReview();};
+$('file-column').onchange=$('file-mode').onchange=updateFileReview;
+function cancelDocument(){documentAbort?.abort();documentAbort=null;$('document-loading').close();$('import-document').disabled=false;}
+$('document-cancel').onclick=cancelDocument;
+$('document-loading').addEventListener('cancel',event=>{event.preventDefault();cancelDocument();});
+$('import-document').onclick=()=>$('document-file').click();
+$('document-file').onchange=()=>{const file=$('document-file').files[0];$('document-file').value='';if(file)importDocument(file);};
+async function importDocument(file){
+ if(documentAbort||document.body.classList.contains('busy'))return notice('正在处理另一个文件，请完成或取消后再导入。');
+ $('document-error').hidden=true;
+ try{documentType(file);}catch(error){$('document-error').textContent=error.message;$('document-error').hidden=false;return;}
+ const controller=new AbortController(),target=activeFolderId;documentAbort=controller;
+ $('import-document').disabled=true;$('document-filename').textContent=file.name;$('document-state').textContent='准备读取…';$('document-progress').value=0;$('document-loading').showModal();
+ try{
+  const {readDocument}=await import('./file-import.js');
+  const data=await readDocument(file,{signal:controller.signal,onProgress:(label,value)=>{if(documentAbort===controller){$('document-state').textContent=label;$('document-progress').value=value;}}});
+  if(documentAbort!==controller||controller.signal.aborted)return;
+  $('document-loading').close();openReview('',null,false,target);fileReview=data;$('review').classList.add('file-review');
+  $('review-title').textContent='校对文件词表';$('review-tip').textContent=`来自：${file.name}。请核对英文词条；原文件不会上传。切换下方选项会重新提取并替换下方清单。`;
+  $('file-source').replaceChildren();const all=element('option','','全部内容');all.value='all';$('file-source').append(all);
+  data.sources.forEach((s,i)=>{const option=element('option','',s.name);option.value=String(i);$('file-source').append(option);});
+  $('file-source-wrap').hidden=data.sources.length<2;$('file-mode').value='entries';$('file-review-options').hidden=false;updateFileColumns();updateFileReview();
+ }catch(error){if(documentAbort===controller&&!controller.signal.aborted){$('document-error').textContent=error.message||'导入失败，请检查文件格式后重试。';$('document-error').hidden=false;}}
+ finally{if(documentAbort===controller){documentAbort=null;$('import-document').disabled=false;$('document-loading').close();}}
+}
 $('save-review').onclick=()=>{
  const raw=$('review-text').value.split(/\r?\n/).filter(s=>s.trim());const entries=cleanEntries($('review-text').value);
  if(!entries.length)return notice('请填写英文单词或短语，每行一项。');
@@ -195,12 +239,12 @@ $('confirm-clear').addEventListener('close',()=>{if($('confirm-clear').returnVal
 $('export').onclick=()=>{const blob=new Blob([visibleWords(folderWords(words,activeFolderId),'',$('sort').value).map(w=>w.text).join('\n')],{type:'text/plain;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`词声-${(currentFolder()?.name||'单词本').replace(/[\\/:*?"<>|]/g,'_')}.txt`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 $('upload').onclick=()=>$('file').click();$('camera').onclick=()=>$('camera-file').click();
 for(const id of ['file','camera-file'])$(id).onchange=()=>{const file=$(id).files[0];$(id).value='';if(file)recognize(file);};
-const dz=$('dropzone');['dragenter','dragover'].forEach(e=>dz.addEventListener(e,event=>{event.preventDefault();dz.classList.add('drag');}));dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));dz.addEventListener('drop',event=>{event.preventDefault();dz.classList.remove('drag');const file=event.dataTransfer.files[0];if(file)recognize(file);});
+const dz=$('dropzone');['dragenter','dragover'].forEach(e=>dz.addEventListener(e,event=>{event.preventDefault();dz.classList.add('drag');}));dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));dz.addEventListener('drop',event=>{event.preventDefault();dz.classList.remove('drag');const file=event.dataTransfer.files[0];if(file){if(file.type.startsWith('image/'))recognize(file);else importDocument(file);}});
 function finishOCR(){document.body.classList.remove('busy');$('recognizing').hidden=true;$('upload').disabled=$('camera').disabled=false;if(previewURL){URL.revokeObjectURL(previewURL);previewURL=null;}}
 async function cancelOCR(){ocrRun++;if(worker){const old=worker;worker=null;await old.terminate().catch(()=>{});}finishOCR();}
 $('cancel-ocr').onclick=cancelOCR;
 async function recognize(file){
- if(document.body.classList.contains('busy'))return;
+ if(document.body.classList.contains('busy')||documentAbort)return;
  if(!/^image\/(jpeg|png|webp)$/.test(file.type))return notice('请选择 JPG、PNG 或 WebP 图片；HEIC 请先转为 JPG。');
  if(file.size>20*1024*1024)return notice('图片超过 20 MB，请压缩后重试。');
  const layout=$('layout').value, extraction=$('extract').value,importFolderId=activeFolderId;
@@ -232,5 +276,5 @@ $('voice-choice').onchange=()=>{stop();voicePreferences[accent]=$('voice-choice'
 $('test-voice').onclick=()=>speakText('Hello! This is your English pronunciation practice.',null);
 $('stop-voice').onclick=()=>{stop();updateVoice();};
 $('refresh-voices').onclick=()=>{speechPlayer.failed.clear();updateVoice();notice('已重新读取设备声音列表。');};
-window.speechSynthesis?.addEventListener('voiceschanged',updateVoice);window.addEventListener('pagehide',()=>{speechPlayer.cancel();worker?.terminate();});
+window.speechSynthesis?.addEventListener('voiceschanged',updateVoice);window.addEventListener('pagehide',()=>{speechPlayer.cancel();worker?.terminate();documentAbort?.abort();});
 selectAccent(accent);render();

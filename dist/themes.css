@@ -71,6 +71,15 @@ progress::-webkit-progress-value { background: var(--green); border-radius: 8px;
 progress::-moz-progress-bar { background: var(--green); border-radius: 8px; }
 :root[data-theme="codex"] button:hover:not(:disabled) { filter: brightness(1.15); }
 main a { color: var(--theme-accent, #244f42); }
+.document-import { margin-top: 18px; padding-top: 2px; border-top: 1px solid var(--line); }
+.document-import .manual-button { color: var(--green); font-weight: 550; }
+.file-review-options { margin-top: 14px; padding: 0 14px 12px; background: var(--theme-soft, #f7faf2); border: 1px solid var(--line); border-radius: 10px; }
+.file-option-grid { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.file-option-grid label { flex: 1 1 110px; min-width: 0; margin: 12px 0 0; }
+.file-option-grid select { display: block; width: 100%; min-width: 0; padding: 8px 4px; margin-top: 7px; font-size: 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--theme-surface, #fff); color: var(--theme-text, #263c34); }
+#document-filename, #document-state { overflow-wrap: anywhere; line-height: 1.8; }
+#document-state { font-size: 13px; }
+.file-review textarea { height: 180px; min-height: 110px; }
 @media (max-width: 650px) {
   .brand-en { display: none; }
   .header-tools { gap: 0; }
