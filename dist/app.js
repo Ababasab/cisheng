@@ -5,20 +5,21 @@ import {migrateFolders,folderWords,addToFolder,folderName} from './folders.js';
 import {SpeechPlayer,matchingVoices,voiceId} from './speech.js';
 import {OcrWorker,loadingProgress} from './ocr.js';
 import {documentType,extractFileEntries} from './file-words.js';
+import {ReadingQueue,readingList} from './reading.js';
 const $ = id => document.getElementById(id);
 const KEY = 'word-notes-v1';
-let words = [], accent = 'en-US', rate = .9, worker = null, ocrRun = 0, editing = null, playing = null, speechRun = 0, previewURL = null;
+let words = [], accent = 'en-US', rate = .9, worker = null, ocrRun = 0, editing = null, playing = null, previewURL = null;
 let noticeTimer;
 let voicePreferences={};
 let folders=[],activeFolderId=null,editingFolderId=null,clearFolderId=null;
 let hideAllChinese=false;
-let documentAbort=null,fileReview=null;
+let documentAbort=null,fileReview=null,readingSpeechPhase='loading';
 const chineseOverrides=new Map(),definitions=new Map(),exampleStates=new Map();
 function notice(text) { $('notice').textContent = text; $('notice').hidden = false; clearTimeout(noticeTimer); noticeTimer = setTimeout(() => $('notice').hidden = true, 5000); }
 try { const stored = JSON.parse(localStorage.getItem(KEY) || '{}')||{};({folders,words,activeFolderId}=migrateFolders(stored));if(['en-US','en-GB'].includes(stored.accent)) accent = stored.accent; if([.7,.9,1.1].includes(stored.rate)) rate=stored.rate; } catch {({folders,words,activeFolderId}=migrateFolders());notice('无法读取本地记录，请导出备份后继续使用。'); }
 try {const stored=JSON.parse(localStorage.getItem(KEY)||'{}');hideAllChinese=stored.hideAllChinese===true;for(const [id,hidden] of Object.entries(stored.chineseOverrides||{}))if(typeof hidden==='boolean')chineseOverrides.set(id,hidden);}catch{}
 try{const stored=JSON.parse(localStorage.getItem(KEY)||'{}');for(const lang of ['en-US','en-GB'])if(typeof stored?.voicePreferences?.[lang]==='string')voicePreferences[lang]=stored.voicePreferences[lang];}catch{}
-function persist() { try { localStorage.setItem(KEY, JSON.stringify({schemaVersion:2,folders,activeFolderId,words,accent,rate,hideAllChinese,chineseOverrides:Object.fromEntries(chineseOverrides),voicePreferences})); } catch { notice('浏览器未能保存记录，请导出单词备份。'); } }
+function persist() { try { localStorage.setItem(KEY, JSON.stringify({schemaVersion:3,folders,activeFolderId,words,accent,rate,hideAllChinese,chineseOverrides:Object.fromEntries(chineseOverrides),voicePreferences})); } catch { notice('浏览器未能保存记录，请导出单词备份。'); } }
 const currentFolder=()=>folders.find(f=>f.id===activeFolderId);
 function voice(){const voices=matchingVoices(window.speechSynthesis?.getVoices()||[],accent);return voices.find(v=>voiceId(v)===voicePreferences[accent])||voices.find(v=>!speechPlayer.failed.has(voiceId(v)))||null;}
 function updateVoice(){
@@ -30,18 +31,54 @@ function updateVoice(){
  const v=voicePreferences[accent]==='__system__'?null:voice();$('voice-status').textContent=v?`当前声音：${v.name} · ${v.localService===true?'本机语音':'在线/系统服务，可能需要联网'}`:'将尝试浏览器默认英语声音；若无声，请选择其他声音或安装对应英语语音包。';
 }
 const speechPlayer=new SpeechPlayer(window.speechSynthesis,window.SpeechSynthesisUtterance,(state,detail)=>{
+ if(readingQueue.active&&['loading','speaking','retry'].includes(state)){readingSpeechPhase=state;$('reading-current-label').textContent=state==='speaking'?'正在朗读':state==='retry'?'正在切换声音':'准备朗读';}
  if(state==='loading')$('voice-status').textContent=`正在准备：${detail.voice?.name||'浏览器默认英语声音'}…`;
  if(state==='speaking')$('voice-status').textContent=`正在朗读：${detail.voice?.name||'浏览器默认英语声音'}`;
  if(state==='retry')$('voice-status').textContent=`${detail.message}，正在尝试其他声音…`;
- if(['done','idle','error'].includes(state)){playing=null;render();}
+ readingQueue.handleSpeechState(state);
+ if(['done','idle','error'].includes(state)&&!readingQueue.active){playing=null;paintPlaying();}
  if(state==='done')$('voice-status').textContent=`播放完成 · ${detail.voice?.name||'浏览器默认英语声音'}`;
  if(state==='error'){$('voice-status').textContent=`${detail.message}。可换一个声音后点“试听”。`;notice(detail.message);$('speech-help').open=true;}
 });
-function stop() { speechRun++;speechPlayer.cancel();playing = null;render(); }
+const readingQueue=new ReadingQueue({
+ play:word=>speechPlayer.play(word.text,{lang:accent,rate,preferred:voicePreferences[accent]||''}),
+ cancel:()=>speechPlayer.cancel(),
+ onChange:state=>{if(state.status==='reading')readingSpeechPhase='loading';playing=state.current?.id||null;updateReadingControls(state);paintPlaying(state.status==='reading');}
+});
+function paintPlaying(scroll=false){
+ const row=playing?$('word-list').querySelector(`[data-word-id="${CSS.escape(playing)}"]`):null;
+ for(const old of $('word-list').querySelectorAll('.playing'))if(old!==row){old.classList.remove('playing');old.removeAttribute('aria-current');}
+ if(row){row.classList.add('playing');row.setAttribute('aria-current','true');if(scroll){const list=$('word-list'),box=list.getBoundingClientRect(),r=row.getBoundingClientRect();if(r.top<box.top||r.bottom>box.bottom)list.scrollTop+=r.top-box.top;}}
+}
+function updateReadingControls(state=readingQueue.snapshot()){
+ const current=folderWords(words,activeFolderId),empty=!current.length;
+ for(const id of ['read-forward','read-reverse','read-range'])$(id).disabled=empty;
+ $('stop-reading').disabled=!state.active;
+ $('reading-now').hidden=!state.active;
+ if(state.active){$('reading-current-number').textContent=`${state.current.number}.`;$('reading-current-word').textContent=state.current.text;$('reading-current-label').textContent=state.status==='waiting'?'刚刚读完':readingSpeechPhase==='speaking'?'正在朗读':readingSpeechPhase==='retry'?'正在切换声音':'准备朗读';}
+ $('reading-progress').textContent=state.active?`连读进度 ${state.index+1} / ${state.total}`:state.status==='complete'?`连读完成 · 共 ${state.total} 个单词`:state.status==='error'?'连读已停止，请检查上方声音提示后重试。':state.status==='stopped'?`已停止连读${state.total?` · ${Math.min(state.index+1,state.total)} / ${state.total}`:''}`:'选择顺读、倒读，或输入编号范围。';
+ let max=0;for(const word of current)max=Math.max(max,word.number);
+ $('reading-number-info').textContent=max?`当前文件夹最大编号：${max}。删除后其余编号不变。`:'添加单词后自动分配编号。';
+}
+function startReading(mode){
+ $('reading-error').textContent='';
+ try{
+  const list=readingList(folderWords(words,activeFolderId),{mode,query:$('search').value,sort:$('sort').value,range:$('reading-range').value});
+  if(mode==='range'&&$('search').value){$('search').value='';render();}
+  readingQueue.start(list);
+ }catch(error){$('reading-error').textContent=error.message;}
+}
+$('read-forward').onclick=()=>startReading('forward');$('read-reverse').onclick=()=>startReading('reverse');$('read-range').onclick=()=>startReading('range');
+$('stop-reading').onclick=()=>stop();
+$('reading-range').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();startReading('range');}});
+$('reading-range').oninput=()=>{$('reading-error').textContent='';};
+window.addEventListener('resize',()=>{if(readingQueue.active)paintPlaying(true);});
+function stop() { readingQueue.stop();playing = null;paintPlaying(); }
 function speak(word) {
  speakText(word.text,word.id);
 }
 function speakText(text,id) {
+ readingQueue.stop();
  playing=id;render();speechPlayer.play(text,{lang:accent,rate,preferred:voicePreferences[accent]||''});
 }
 const speaker = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 8c3 2 3 6 0 8M20 5c5 4 5 10 0 14"/></svg>';
@@ -93,7 +130,7 @@ function paintExamples(w,row){
  if(state.status==='ready')area.append(element('p','example-message',`随机选自双语例句库 · 当前有 ${state.pool.length} 句可选${state.pool.length<=2?'，已全部展示':''}`));
  const collapse=element('button','text-button','收起例句');collapse.onclick=()=>{exampleStates.delete(w.text.toLowerCase());render();};area.append(collapse);row.append(area);
 }
-function switchFolder(id){speechPlayer.cancel();speechRun++;playing=null;activeFolderId=id;exampleStates.clear();$('search').value='';$('word-list').scrollTop=0;persist();render();}
+function switchFolder(id){readingQueue.reset();playing=null;activeFolderId=id;exampleStates.clear();$('search').value='';$('reading-error').textContent='';$('reading-range').value='';$('word-list').scrollTop=0;persist();render();}
 function renderFolders(){
  const active=document.createDocumentFragment(),archived=document.createDocumentFragment();
  for(const folder of folders){
@@ -136,10 +173,10 @@ function render() {
  $('empty').hidden=current.length>0; $('no-results').hidden=!current.length||shown.length>0;
  $('empty-title').textContent=folder?'下一次遇到生词，点一下就会读':'给这一组新单词起个名字';
  const frag=document.createDocumentFragment(),rowsById=new Map();
- shown.forEach((w,i)=>{
+ shown.forEach(w=>{
   const row=document.createElement('div');row.className='word-row'+(playing===w.id?' playing':'');row.dataset.wordId=w.id;
   const summary=element('div','word-summary');
-  const number=document.createElement('span');number.className='word-number';number.textContent=String(i+1).padStart(2,'0');
+  const number=document.createElement('span');number.className='word-number';number.textContent=`${w.number}.`;number.title='固定录入编号';row.dataset.wordNumber=String(w.number);
   const text=document.createElement('span');text.className='word-text';text.textContent=w.text;
   const main=element('div','word-main');main.append(text,element('span','ipa','加载音标…'));
   const meaning=element('div','word-meaning'),meaningBody=element('div','meaning-body');meaningBody.hidden=hiddenChinese(w.id);
@@ -149,7 +186,7 @@ function render() {
   const edit=document.createElement('button');edit.className='edit';edit.textContent='编辑';edit.setAttribute('aria-label',`编辑 ${w.text}`);edit.onclick=()=>openReview(w.text,w.id);
   edit.disabled=archived;
   const play=document.createElement('button');play.className='speak';play.innerHTML=speaker;play.setAttribute('aria-label',`朗读 ${w.text}`);play.onclick=()=>speak(w);
-  const remove=document.createElement('button');remove.className='remove';remove.textContent='×';remove.setAttribute('aria-label',`删除 ${w.text}`);remove.onclick=()=>{if(playing===w.id)stop();words=words.filter(x=>x.id!==w.id);chineseOverrides.delete(w.id);persist();render();};
+  const remove=document.createElement('button');remove.className='remove';remove.textContent='×';remove.setAttribute('aria-label',`删除 ${w.text}`);remove.onclick=()=>{if(readingQueue.active||playing===w.id)stop();words=words.filter(x=>x.id!==w.id);chineseOverrides.delete(w.id);persist();render();};
   remove.disabled=archived;
   const actions=element('div','word-actions');actions.append(play,edit,remove);
   summary.append(number,main,meaning,actions);row.append(summary);
@@ -158,13 +195,15 @@ function render() {
  });$('word-list').replaceChildren(frag);
  for(const w of shown){const row=rowsById.get(w.id);if(definitions.has(w.text.toLowerCase()))paintDefinition(w,row);else observer.observe(row);}
  $('toggle-all-chinese').textContent=hideAllChinese?'显示全部中文':'隐藏全部中文';$('toggle-all-chinese').setAttribute('aria-pressed',String(hideAllChinese));
+ updateReadingControls();paintPlaying();
 }
 $('toggle-all-chinese').onclick=()=>{hideAllChinese=!hideAllChinese;chineseOverrides.clear();persist();render();};
 function selectAccent(value) { stop();accent=value;$('us').classList.toggle('selected',value==='en-US');$('uk').classList.toggle('selected',value==='en-GB');$('us').setAttribute('aria-pressed',String(value==='en-US'));$('uk').setAttribute('aria-pressed',String(value==='en-GB'));updateVoice();persist(); }
 $('us').onclick=()=>selectAccent('en-US');$('uk').onclick=()=>selectAccent('en-GB');
 $('speed').value=String(rate);$('speed').onchange=()=>{stop();rate=Number($('speed').value);persist();};
-$('search').oninput=render;$('sort').onchange=render;
+$('search').oninput=$('sort').onchange=()=>{if(readingQueue.active)stop();render();};
 function openReview(text='',id=null,ocr=false,targetFolderId=activeFolderId) {
+ if(readingQueue.active)stop();
  fileReview=null;$('file-review-options').hidden=true;$('review').classList.remove('file-review');
  editing=id;$('review-title').textContent=id?'修改单词':ocr?'校对识别结果':'添加单词';$('review-tip').textContent=ocr?'请删掉音标、页眉和多余内容，修正识别有误的单词。识别出的短语可能被拆开，可手动合并。':'每行填写一个英文单词或短语；在所选文件夹中自动去重。';
  $('review-destination').hidden=!!id;$('destination-folder').replaceChildren();
@@ -228,14 +267,14 @@ $('save-review').onclick=()=>{
   let target=$('destination-folder').value;
   if(target==='__new__'){const name=folderName($('destination-name').value),error=nameError(name);if(error){$('review-error').textContent=error;return;}const folder={id:crypto.randomUUID(),name,archived:false};folders.push(folder);target=folder.id;}
   if(!folders.some(f=>f.id===target&&!f.archived))return notice('请选择一个未归档的文件夹。');
-  const added=addToFolder(words,entries,target);words.push(...added);switchFolder(target);
+  const folder=folders.find(f=>f.id===target),added=addToFolder(words,entries,target,undefined,folder.nextNumber);if(added.length)folder.nextNumber=added.at(-1).number+1;words.push(...added);switchFolder(target);
   notice(added.length?`已向“${currentFolder().name}”加入 ${added.length} 个单词，重复项已跳过。`:'这些单词已在所选文件夹中。');
  }
  persist();render();$('review').close();
 };
 $('demo').onclick=()=>openReview('beautiful\ncuriosity\ndiscover\njourney\npronunciation\nwonderful');
 $('clear').onclick=()=>{const folder=currentFolder();if(!folder||folder.archived)return;clearFolderId=folder.id;$('clear-title').textContent=`清空“${folder.name}”里的单词？`;$('confirm-clear').showModal();};
-$('confirm-clear').addEventListener('close',()=>{if($('confirm-clear').returnValue==='clear'&&clearFolderId&&!folders.find(f=>f.id===clearFolderId)?.archived){stop();for(const w of folderWords(words,clearFolderId))chineseOverrides.delete(w.id);words=words.filter(w=>w.folderId!==clearFolderId);exampleStates.clear();persist();render();}clearFolderId=null;});
+$('confirm-clear').addEventListener('close',()=>{if($('confirm-clear').returnValue==='clear'&&clearFolderId&&!folders.find(f=>f.id===clearFolderId)?.archived){readingQueue.reset();playing=null;for(const w of folderWords(words,clearFolderId))chineseOverrides.delete(w.id);words=words.filter(w=>w.folderId!==clearFolderId);folders.find(f=>f.id===clearFolderId).nextNumber=1;exampleStates.clear();persist();render();}clearFolderId=null;});
 $('export').onclick=()=>{const blob=new Blob([visibleWords(folderWords(words,activeFolderId),'',$('sort').value).map(w=>w.text).join('\n')],{type:'text/plain;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`词声-${(currentFolder()?.name||'单词本').replace(/[\\/:*?"<>|]/g,'_')}.txt`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 $('upload').onclick=()=>$('file').click();$('camera').onclick=()=>$('camera-file').click();
 for(const id of ['file','camera-file'])$(id).onchange=()=>{const file=$(id).files[0];$(id).value='';if(file)recognize(file);};
@@ -276,5 +315,5 @@ $('voice-choice').onchange=()=>{stop();voicePreferences[accent]=$('voice-choice'
 $('test-voice').onclick=()=>speakText('Hello! This is your English pronunciation practice.',null);
 $('stop-voice').onclick=()=>{stop();updateVoice();};
 $('refresh-voices').onclick=()=>{speechPlayer.failed.clear();updateVoice();notice('已重新读取设备声音列表。');};
-window.speechSynthesis?.addEventListener('voiceschanged',updateVoice);window.addEventListener('pagehide',()=>{speechPlayer.cancel();worker?.terminate();documentAbort?.abort();});
+window.speechSynthesis?.addEventListener('voiceschanged',updateVoice);window.addEventListener('pagehide',()=>{readingQueue.stop();worker?.terminate();documentAbort?.abort();});
 selectAccent(accent);render();
