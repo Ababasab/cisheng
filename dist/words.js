@@ -8,8 +8,8 @@ export function parseEntryInput(text) {
 }
 export function cleanEntries(text) {
  const seen = new Set();
- return text.split(/\r?\n/).map(s => s.trim().replace(/[’‘]/g, "'").replace(/^[\d.、)\s•·-]+/, '').replace(/\s+/g, ' ')).filter(s => {
-  if (!/^[a-zA-Z]+(?:[ '-][a-zA-Z]+)*$/.test(s) || s.length > 100) return false;
+ return text.split(/\r?\n/).map(s => s.trim().replace(/[’‘]/g, "'").replace(/^[\d.、)\s•·-]+/, '').replace(/(?:\.{3,}|…+)/g,' … ').replace(/\s+/g, ' ').trim()).filter(s => {
+  if (!/^(?:[a-z]+(?:['-][a-z]+)*|(?:sb|sth)\.)(?: (?:[a-z]+(?:['-][a-z]+)*|(?:sb|sth)\.|…))*$/i.test(s) || s.length > 100) return false;
   const key = s.toLowerCase(); if (seen.has(key)) return false; seen.add(key); return true;
  });
 }

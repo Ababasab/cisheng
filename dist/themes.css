@@ -92,6 +92,8 @@ main a { color: var(--theme-accent, #244f42); }
 .study-toolbar .help-drawer,.notebook-footer .help-drawer { margin-top: 0; }
 .sidebar-help { padding: 4px 12px; }
 .sources-help { margin-top: 20px; }
+.dictionary-link { font-size: 10px; line-height: 1.8; margin-top: 4px; white-space: nowrap; }
+.meaning-tools { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; flex-shrink: 0; }
 .section-label,.eyebrow,.device-note,.brand-en,.intro>p,#folder-total { display: none; }
 @media(max-width:650px){.voice-info{margin-left:20px;margin-right:20px}.reading-heading{flex-wrap:wrap}}
 .reading-heading h3 { font-size: 13px; font-weight: 600; margin: 0; }

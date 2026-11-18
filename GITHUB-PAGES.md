@@ -55,3 +55,13 @@ lookupWord 改由 dist/dictionary.js 实现。常用词按前两字母从 data/c
 IntersectionObserver 之外，初次渲染与滚动也主动加载列表可见行，最多预读附近 20 行；失败明确显示音标/词典加载失败和重试按钮。
 
 scripts/split_common_dictionary.py 可从现有 common 数据重建 702 个分片，原构建脚本也调用此步骤。新增 tests/dictionary.test.js 和 tests/dictionary_mobile_qa.py，后者支持 QA_URL，验证截图四词、观察器失效、断网缓存、失败重试、完全挂起请求超时及手机布局。
+
+## 短语与占位符查询
+
+支持 `keep ... quick` / `keep … quick` 等省略号格式，统一保留为 `keep … quick`；支持 sb.、sth.，不把占位符删除后当作另一短语。短语继续作为一条词汇，去重、排序、编辑和保存沿用原流程。
+
+查询优先整条 ECDICT，sb./sth. 在查询时匹配 sb/sth 词条；省略号查询可匹配同一词典分片中的相关条目，明确标注“相关词典词条”供上下文选择。完整释义不存在时，自动查询各组成词，显示“不等于短语翻译”的单词释义参考；不拼造完整短语音标，不自动把 quick 改为 quiet。
+
+短语旁“牛津查词”只打开官方学习词典查询页，不自动抓取或宣称显示牛津释义。牛津官方 API 需 App ID/App Key 及试用/付费服务，正式集成需后端安全代理及核对所需双语内容许可，现有静态网页没有此接入。来源页已说明本地释义与外部查询的区别。
+
+新增 tests/phrases.test.js 与 tests/phrases_browser_qa.py（支持 QA_URL）。

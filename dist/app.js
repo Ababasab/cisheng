@@ -1,3 +1,4 @@
+import {oxfordSearchURL} from './phrases.js';
 import { cleanEntries, extractWords, extractHeadwords, visibleWords,parseEntryInput } from './words.js';
 import { findGutter, headwordInset } from './layout.js';
 import { lookupWord, loadExamples, pickExamples } from './learning.js';
@@ -103,7 +104,7 @@ async function enrich(w,retry=false){
 function paintDefinition(w,row=null){
  row ||= $('word-list').querySelector(`[data-word-id="${CSS.escape(w.id)}"]`);if(!row)return;
  const state=definitions.get(w.text.toLowerCase());const ipa=row.querySelector('.ipa'),meaning=row.querySelector('.meaning-text'),retry=row.querySelector('.retry-definition');
- ipa.textContent=state?.data?.ipa?`/${state.data.ipa.replace(/^\[|\]$/g,'')}/`:state?.status==='loading'?'加载音标…':state?.status==='error'?'音标加载失败':'暂无音标';
+ ipa.textContent=state?.data?.ipa?`/${state.data.ipa.replace(/^\[|\]$/g,'')}/`:state?.status==='loading'?'加载音标…':state?.status==='error'?'音标加载失败':w.text.includes(' ')?'暂无完整短语音标':'暂无音标';
  ipa.title='词典参考音标，以英式为主；朗读使用上方选择的口音。';
  meaning.textContent=state?.data?.zh|| (state?.status==='error'?'词典加载失败':state?.status==='missing'?'词典暂未收录，请检查拼写':'正在查释义…');
  retry.hidden=state?.status!=='error';
@@ -190,7 +191,8 @@ function render() {
   const meaning=element('div','word-meaning'),meaningBody=element('div','meaning-body');meaningBody.hidden=hiddenChinese(w.id);
   const meaningText=element('span','meaning-text','正在查释义…');meaningBody.append(meaningText);
   const retry=element('button','retry-definition','重试');retry.hidden=true;retry.onclick=()=>enrich(w,true);
-  const toggle=element('button','toggle-chinese',hiddenChinese(w.id)?'显示中文':'隐藏中文');toggle.setAttribute('aria-label',`${hiddenChinese(w.id)?'显示':'隐藏'} ${w.text} 的中文`);toggle.setAttribute('aria-pressed',String(hiddenChinese(w.id)));toggle.onclick=()=>{chineseOverrides.set(w.id,!hiddenChinese(w.id));persist();render();};meaning.append(meaningBody,retry,toggle);
+  const toggle=element('button','toggle-chinese',hiddenChinese(w.id)?'显示中文':'隐藏中文');toggle.setAttribute('aria-label',`${hiddenChinese(w.id)?'显示':'隐藏'} ${w.text} 的中文`);toggle.setAttribute('aria-pressed',String(hiddenChinese(w.id)));toggle.onclick=()=>{chineseOverrides.set(w.id,!hiddenChinese(w.id));persist();render();};meaning.append(meaningBody,retry);
+  if(w.text.includes(' ')){const link=element('a','dictionary-link','牛津查词 ↗');link.href=oxfordSearchURL(w.text);link.target='_blank';link.rel='noopener noreferrer';link.setAttribute('aria-label',`在牛津词典查询 ${w.text}`);const tools=element('div','meaning-tools');tools.append(toggle,link);meaning.append(tools);}else meaning.append(toggle);
   const edit=document.createElement('button');edit.className='edit';edit.textContent='编辑';edit.setAttribute('aria-label',`编辑 ${w.text}`);edit.onclick=()=>openReview(w.text,w.id);
   edit.disabled=archived;
   const play=document.createElement('button');play.className='speak';play.innerHTML=speaker;play.setAttribute('aria-label',`朗读 ${w.text}`);play.onclick=()=>speak(w);
@@ -219,7 +221,7 @@ $('review-text').addEventListener('input',updateReviewSummary);
 function openReview(text='',id=null,ocr=false,targetFolderId=activeFolderId) {
  if(readingQueue.active)stop();
  fileReview=null;$('file-review-options').hidden=true;$('review').classList.remove('file-review');
- editing=id;$('review-title').textContent=id?'修改单词':ocr?'校对识别结果':'添加单词';$('review-tip').textContent=ocr?'请删掉音标、页眉和多余内容，修正识别有误的单词。识别出的短语可能被拆开，可手动合并。':'支持顿号、中英文逗号、分号或换行分隔，空格保留为短语；在所选文件夹中自动去重。';
+ editing=id;$('review-title').textContent=id?'修改单词':ocr?'校对识别结果':'添加单词';$('review-tip').textContent=ocr?'请删掉音标、页眉和多余内容，修正识别有误的单词。识别出的短语可能被拆开，可手动合并。':'支持顿号、中英文逗号、分号或换行分隔，空格保留为短语，支持 …、sb.、sth. 等占位写法；在所选文件夹中自动去重。';
  $('review-destination').hidden=!!id;$('destination-folder').replaceChildren();
  for(const folder of folders.filter(f=>!f.archived)){const option=element('option','',folder.name);option.value=folder.id;$('destination-folder').append(option);}
  const create=element('option','','＋ 新建文件夹并添加');create.value='__new__';$('destination-folder').append(create);

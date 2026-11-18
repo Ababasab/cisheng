@@ -12,6 +12,11 @@ test('invalid list segments stay visible for correction and never silently disap
  assert.deepEqual(parseEntryInput('apple、中文，banana;abc123').invalid,['中文','abc123']);
  assert.deepEqual(parseEntryInput('、、,;；\n\t'),{entries:[],invalid:[]});
 });
+test('phrase placeholders normalize ellipses without deleting their meaning or splitting the phrase',()=>{
+ assert.deepEqual(parseEntryInput('keep ... quick、keep…quiet\nkeep sth. quiet').entries,['keep … quick','keep … quiet','keep sth. quiet']);
+ assert.deepEqual(cleanEntries('keep … quick\nkeep ... quick'),['keep … quick']);
+ assert.equal(cleanEntries('...').length,0);assert.equal(cleanEntries('<script>').length,0);
+});
 test('deduplicate without changing phrases, contractions or case',()=>assert.deepEqual(cleanEntries("Apple\napple\nlook forward to\nit’s\nwell-known\n中文\n<svg>\n"),['Apple','look forward to',"it's",'well-known']));
 test('remove IPA and Chinese, keep words in reading order',()=>assert.equal(extractWords('1. apple /ˈæpl/ 苹果\n2. banana [bəˈnɑːnə] 香蕉'), 'apple\nbanana'));
 test('sorting never mutates import order; search ignores case',()=>{const w=[{text:'Zoo'},{text:'apple'},{text:'banana'}];assert.deepEqual(visibleWords(w,'','az').map(w=>w.text),['apple','banana','Zoo']);assert.equal(w[0].text,'Zoo');assert.equal(visibleWords(w,'APP','original')[0].text,'apple');});
