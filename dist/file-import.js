@@ -1,6 +1,7 @@
 import {documentType,pdfTextRows,ROW_LIMIT} from './file-words.js';
 import {OcrWorker,loadingProgress} from './ocr.js';
-import {findGutter,headwordInset} from './layout.js';
+import {findColumns,colouredText,removeTableRules} from './layout.js';
+import {readOcrEntries,mergeOcrEntries} from './ocr-entries.js';
 
 const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
 function check(signal){if(signal.aborted)throw new DOMException('已取消导入','AbortError');}
@@ -124,10 +125,10 @@ async function pdfSources(bytes,{signal,onProgress}){
      const abortRender=()=>rendering.cancel();signal.addEventListener('abort',abortRender,{once:true});
      try{await cancellable(rendering.promise,signal);}finally{signal.removeEventListener('abort',abortRender);}
      check(signal);
-     if(!ocr){ocr=new OcrWorker(m=>{if(!signal.aborted)onProgress(`扫描页 ${pageNumber} / ${pdf.numPages} · ${m.status==='recognizing text'?`识别 ${Math.round(m.progress*100)}%`:loadingProgress(m).label}`,(pageNumber-1)/pdf.numPages);});await ocr.initialize();await ocr.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1',user_defined_dpi:'300'});}
-     const split=findGutter(canvas);
-     const columns=split?[{left:0,top:0,width:split,height:canvas.height},{left:split,top:0,width:canvas.width-split,height:canvas.height}]:[{left:0,top:0,width:canvas.width,height:canvas.height}];
-     for(const rect of columns){check(signal);const inset=headwordInset(canvas,rect);rect.left+=inset;rect.width-=inset;const result=await ocr.recognize(canvas,{rectangle:rect});rows.push(...result.data.text.split(/\r?\n/).map(line=>[line]));}
+     if(!ocr){ocr=new OcrWorker(m=>{if(!signal.aborted)onProgress(`扫描页 ${pageNumber} / ${pdf.numPages} · ${m.status==='recognizing text'?`识别 ${Math.round(m.progress*100)}%`:loadingProgress(m).label}`,(pageNumber-1)/pdf.numPages);});await ocr.initialize({mixed:true});await ocr.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1',user_defined_dpi:'300'});}
+     removeTableRules(canvas);const columns=findColumns(canvas),colour=colouredText(canvas);
+     for(const rect of columns){check(signal);const result=await ocr.recognize(canvas,{rectangle:rect});let entries=readOcrEntries(result.data);if(colour){check(signal);const alternate=await ocr.recognize(colour,{rectangle:rect});entries=mergeOcrEntries(entries,readOcrEntries(alternate.data));}rows.push(...entries.map(entry=>[entry.text]));}
+     if(colour)colour.width=colour.height=0;
     }finally{canvas.width=canvas.height=0;}
    }
    page.cleanup();

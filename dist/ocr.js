@@ -18,30 +18,35 @@ export class OcrWorker{
   const jobId=`word-ocr-${++this.sequence}`;
   return new Promise((resolve,reject)=>{const timer=setTimeout(()=>this.fail(new Error('识别资源加载或处理超时，请换 Wi-Fi 后重试。')),this.timeout);this.jobs.set(jobId,{resolve,reject,timer});this.raw.postMessage({workerId:'word-ocr',jobId,action,payload});});
  }
- async initialize(){
-  this.logger({status:'model download',progress:0});const timeout=setTimeout(()=>this.abort.abort(),120000);let bytes;
+ async model(file,label){
+  this.logger({status:'model download',progress:0,language:label});const timeout=setTimeout(()=>this.abort.abort(),120000);let bytes;
   try{
-   const response=await fetch(new URL('lang/eng-lstm-v1.traineddata.gz',this.base),{signal:this.abort.signal});
-   if(!response.ok)throw Error(`英语模型下载失败（HTTP ${response.status}），请检查网络后重试。`);
+   const response=await fetch(new URL(`lang/${file}`,this.base),{signal:this.abort.signal});
+   if(!response.ok)throw Error(`${label}模型下载失败（HTTP ${response.status}），请检查网络后重试。`);
    const total=Number(response.headers.get('Content-Length'))||2952873;
    if(response.body?.getReader){const reader=response.body.getReader(),chunks=[];let size=0;
-    while(true){const {done,value}=await reader.read();if(done)break;chunks.push(value);size+=value.length;this.logger({status:'model download',progress:Math.min(size/total,1),loaded:size,total});}
+    while(true){const {done,value}=await reader.read();if(done)break;chunks.push(value);size+=value.length;this.logger({status:'model download',progress:Math.min(size/total,1),loaded:size,total,language:label});}
     bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
    }else bytes=new Uint8Array(await response.arrayBuffer());
-   if(bytes[0]!==31||bytes[1]!==139)throw Error('英语模型内容不完整，请检查网络后重试。');
-  }catch(error){if(this.closed)throw this.failureError||new DOMException('已取消识别','AbortError');if(error.name==='AbortError')throw Error('英语模型下载超时，请换 Wi-Fi 后重试。');throw error;}
+   if(bytes[0]!==31||bytes[1]!==139)throw Error(`${label}模型内容不完整，请检查网络后重试。`);
+  }catch(error){if(this.closed)throw this.failureError||new DOMException('已取消识别','AbortError');if(error.name==='AbortError')throw Error(`${label}模型下载超时，请换 Wi-Fi 后重试。`);throw error;}
   finally{clearTimeout(timeout);}
   if(this.closed)throw new DOMException('已取消识别','AbortError');
+  return bytes;
+ }
+ async initialize({mixed=false}={}){
+  const langs=[{code:'eng',data:await this.model('eng-lstm-v1.traineddata.gz','英语')}];
+  if(mixed)langs.push({code:'chi_sim',data:await this.model('chi_sim-fast-v1.traineddata.gz','中英混排')});
   await this.request('load',{options:{lstmOnly:true,corePath:new URL('core/',this.base).href,logging:false}});
   // Bypass IndexedDB language-cache hangs by passing the downloaded model bytes directly.
-  await this.request('loadLanguage',{langs:[{code:'eng',data:bytes}],options:{cacheMethod:'none',gzip:true,lstmOnly:true}});
-  await this.request('initialize',{langs:'eng',oem:1,config:{}});
+  await this.request('loadLanguage',{langs,options:{cacheMethod:'none',gzip:true,lstmOnly:true}});
+  await this.request('initialize',{langs:langs.map(lang=>lang.code).join('+'),oem:1,config:{}});
  }
  setParameters(params){return this.request('setParameters',{params});}
- async recognize(canvas,options={}){const blob=await new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(Error('图片转换失败，请换一张图片。')),'image/png'));const image=new Uint8Array(await blob.arrayBuffer());return this.request('recognize',{image,options,output:{text:true}});}
+ async recognize(canvas,options={}){const blob=await new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(Error('图片转换失败，请换一张图片。')),'image/png'));const image=new Uint8Array(await blob.arrayBuffer());return this.request('recognize',{image,options,output:{text:true,tsv:true}});}
 }
 export function loadingProgress(m){
- if(m.status==='model download')return {label:`下载英语模型 ${((m.loaded||0)/1048576).toFixed(1)} / ${((m.total||2952873)/1048576).toFixed(1)} MB`,value:Math.min(.4,(m.progress||0)*.4)};
+ if(m.status==='model download')return {label:`下载${m.language||'英语'}模型 ${((m.loaded||0)/1048576).toFixed(1)} / ${((m.total||2952873)/1048576).toFixed(1)} MB`,value:Math.min(.4,(m.progress||0)*.4)};
  const stages={'loading tesseract core':['下载并启动识别引擎',.4,.2],'initializing tesseract':['准备识别内存',.6,.1],'loading language traineddata':['装载英语模型',.7,.15],'initializing api':['初始化识别器',.85,.1]};
  const stage=stages[m.status]||['正在准备识别…',.4,0];return {label:`${stage[0]}${m.progress===undefined?'':` ${Math.round(m.progress*100)}%`}`,value:stage[1]+(m.progress||0)*stage[2]};
 }
