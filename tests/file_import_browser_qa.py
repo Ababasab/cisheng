@@ -114,7 +114,7 @@ with sync_playwright() as p:
  page.locator('#save-review').click();expect(page.locator('#count')).to_have_text('4500',timeout=30000)
  elapsed=time.monotonic()-started;assert elapsed<30,elapsed
  page.screenshot(path=str(out/'import-desktop.png'),full_page=True)
- page.set_viewport_size({'width':390,'height':844});preview('words.xlsx',base+['conscious','option'])
+ page.set_viewport_size({'width':390,'height':844});preview('words.xlsx',base);expect(page.locator('#file-source')).to_have_value('0');page.locator('#file-source').select_option('all');expect(page.locator('#review-text')).to_have_value('\n'.join(base+['conscious','option']))
  assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
  page.screenshot(path=str(out/'import-mobile.png'));close()
  page.reload();expect(page.locator('#count')).to_have_text('4500',timeout=30000)

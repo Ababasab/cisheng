@@ -1,7 +1,8 @@
 import {createCloud,authMessage} from './cloud.js';
 import {SyncEngine} from './sync-engine.js';
+import {sameSnapshot} from './sync-model.js';
 
-export function setupAccount({store,getState,applyState,notice}){
+export function setupAccount({store,getState,applyState,notice,beforeSwitch=()=>{}}){
  const $=id=>document.getElementById(id),dialog=$('account-dialog');
  let cloud=null,engine=null,user=null,mode='login',busy=false,poll=null,lastStatus='local';
  const setBusy=value=>{busy=value;for(const id of ['account-submit','account-signout','account-mode','account-forgot','account-email','account-password'])$(id).disabled=value;};
@@ -23,6 +24,7 @@ export function setupAccount({store,getState,applyState,notice}){
  }
  function switchUser(next){
   if(user?.id===next?.id)return;
+  beforeSwitch();
   engine?.detach();clearInterval(poll);
   for(const d of document.querySelectorAll('dialog[open]'))if(d!==dialog){d.returnValue='cancel';d.close();}
   user=next;
@@ -68,7 +70,12 @@ export function setupAccount({store,getState,applyState,notice}){
   catch(error){showMessage(authMessage(error),true);}finally{setBusy(false);}
  };
  window.addEventListener('online',retry);window.addEventListener('focus',retry);document.addEventListener('visibilitychange',()=>{if(!document.hidden)retry();});
- window.addEventListener('storage',event=>{if(event.key==='word-notes-owner-v1'&&event.newValue!==store.owner)location.reload();});
+ window.addEventListener('storage',event=>{
+  if(event.key==='word-notes-owner-v1'&&event.newValue!==store.owner){location.reload();return;}
+  if(event.key==='word-notes-v1'&&event.newValue&&(localStorage.getItem('word-notes-owner-v1')||null)===store.owner){
+   try{const state=JSON.parse(event.newValue);if(!sameSnapshot(getState(),state))applyState(state);}catch{}
+  }
+ });
  const ready=(async()=>{
   try{
    cloud=await createCloud();if(!cloud){status('local');return;}

@@ -10,32 +10,51 @@ import {documentType,extractFileEntries} from './file-words.js';
 import {ReadingQueue,readingList,numberedWords,SPEECH_RATES} from './reading.js';
 import {ProfileStore} from './sync-store.js';
 import {setupAccount} from './account.js';
+import {normalizePreferences,captureListPosition,restoreListPosition} from './preferences.js';
 const $ = id => document.getElementById(id);
 const KEY = 'word-notes-v1';
 let words = [], accent = 'en-US', rate = 1, worker = null, ocrRun = 0, editing = null, playing = null, previewURL = null;
 let noticeTimer;
-let profileStore=null,accountController=null;
+let profileStore=null,accountController=null,initialState={};
+let uiPreferences=normalizePreferences(),preferenceTimer=null;
 let voicePreferences={};
 let folders=[],activeFolderId=null,editingFolderId=null,clearFolderId=null,deleteFolderId=null,deleteFolderVersion=null;
 let hideAllChinese=false;
 let documentAbort=null,fileReview=null,readingSpeechPhase='loading';
 const chineseOverrides=new Map(),definitions=new Map(),exampleStates=new Map();
 function notice(text) { $('notice').textContent = text; $('notice').hidden = false; clearTimeout(noticeTimer); noticeTimer = setTimeout(() => $('notice').hidden = true, 5000); }
-try{profileStore=new ProfileStore(localStorage);profileStore.boot();}catch{notice('本机存储暂时不可用，请先导出单词备份。');}
-try { const stored = JSON.parse(localStorage.getItem(KEY) || '{}')||{};({folders,words,activeFolderId}=migrateFolders(stored));if(['en-US','en-GB'].includes(stored.accent)) accent = stored.accent; if([...SPEECH_RATES,.7,.9,1.1].includes(stored.rate)) rate=stored.rate; } catch {({folders,words,activeFolderId}=migrateFolders());notice('无法读取本地记录，请导出备份后继续使用。'); }
-try {const stored=JSON.parse(localStorage.getItem(KEY)||'{}');hideAllChinese=stored.hideAllChinese===true;for(const [id,hidden] of Object.entries(stored.chineseOverrides||{}))if(typeof hidden==='boolean')chineseOverrides.set(id,hidden);}catch{}
-try{const stored=JSON.parse(localStorage.getItem(KEY)||'{}');for(const lang of ['en-US','en-GB'])if(typeof stored?.voicePreferences?.[lang]==='string')voicePreferences[lang]=stored.voicePreferences[lang];}catch{}
-function appState(){return {schemaVersion:3,folders,activeFolderId,words,accent,rate,hideAllChinese,chineseOverrides:Object.fromEntries(chineseOverrides),voicePreferences};}
+try{profileStore=new ProfileStore(localStorage);initialState=profileStore.boot();}catch{notice('本机存储暂时不可用，请先导出单词备份。');}
+try { const stored=initialState;({folders,words,activeFolderId}=migrateFolders(stored));if(['en-US','en-GB'].includes(stored.accent)) accent = stored.accent; if([...SPEECH_RATES,.7,.9,1.1].includes(stored.rate)) rate=stored.rate; } catch {({folders,words,activeFolderId}=migrateFolders());notice('无法读取本地记录，请导出备份后继续使用。'); }
+try {const stored=initialState;hideAllChinese=stored.hideAllChinese===true;for(const [id,hidden] of Object.entries(stored.chineseOverrides||{}))if(typeof hidden==='boolean')chineseOverrides.set(id,hidden);}catch{}
+try{const stored=initialState;for(const lang of ['en-US','en-GB'])if(typeof stored?.voicePreferences?.[lang]==='string')voicePreferences[lang]=stored.voicePreferences[lang];}catch{}
+uiPreferences=normalizePreferences(initialState.uiPreferences);
+function rememberView(){if(activeFolderId)uiPreferences.views[activeFolderId]={query:$('search').value,range:$('reading-range').value,position:captureListPosition($('word-list'))};}
+function persistPreferences(){try{if(profileStore)profileStore.savePreferences(uiPreferences);else localStorage.setItem(KEY,JSON.stringify({...JSON.parse(localStorage.getItem(KEY)||'{}'),uiPreferences}));}catch{notice('浏览器未能保存页面设置。');}}
+function savePreferences(){clearTimeout(preferenceTimer);preferenceTimer=setTimeout(()=>{rememberView();persistPreferences();},300);}
+function flushPreferences(){clearTimeout(preferenceTimer);rememberView();for(const detail of document.querySelectorAll('details[id]'))uiPreferences.details[detail.id]=detail.open;persistPreferences();}
+function restoreView(){const view=uiPreferences.views[activeFolderId];$('search').value=view?.query||'';$('reading-range').value=view?.range||'';}
+function restoreControls(){
+ for(const [id,key] of [['sort','sort'],['layout','layout'],['extract','extract'],['file-mode','fileMode']])$(id).value=uiPreferences[key];
+ for(const detail of document.querySelectorAll('details[id]'))detail.open=uiPreferences.details[detail.id]??false;
+ restoreView();
+}
+restoreControls();
+function appState(){return {schemaVersion:3,folders,activeFolderId,words,accent,rate,hideAllChinese,chineseOverrides:Object.fromEntries(chineseOverrides),voicePreferences,uiPreferences};}
 function persist() { try {if(profileStore)profileStore.save(appState());else localStorage.setItem(KEY,JSON.stringify(appState()));accountController?.changed();} catch { notice('浏览器未能保存记录，请导出单词备份。'); } }
 function applyAccountState(state,accountSwitch=false){
  readingQueue.reset();playing=null;
  if(accountSwitch){cancelOCR();cancelDocument();clearFolderId=null;deleteFolderId=null;deleteFolderVersion=null;editing=null;editingFolderId=null;}
  const oldFolder=activeFolderId;({folders,words,activeFolderId}=migrateFolders(state));
  if(!accountSwitch&&folders.some(f=>f.id===oldFolder))activeFolderId=oldFolder;
- accent=['en-US','en-GB'].includes(state.accent)?state.accent:'en-US';rate=[...SPEECH_RATES,.7,.9,1.1].includes(state.rate)?state.rate:1;
- hideAllChinese=state.hideAllChinese===true;chineseOverrides.clear();for(const [id,hidden] of Object.entries(state.chineseOverrides||{}))if(typeof hidden==='boolean')chineseOverrides.set(id,hidden);
- voicePreferences=state.voicePreferences||{};exampleStates.clear();$('search').value='';$('reading-error').textContent='';
- $('us').classList.toggle('selected',accent==='en-US');$('uk').classList.toggle('selected',accent==='en-GB');$('us').setAttribute('aria-pressed',String(accent==='en-US'));$('uk').setAttribute('aria-pressed',String(accent==='en-GB'));$('speed').value=String(rate);updateVoice();render();
+ if(accountSwitch){
+  clearTimeout(preferenceTimer);uiPreferences=normalizePreferences(state.uiPreferences);restoreControls();
+  accent=['en-US','en-GB'].includes(state.accent)?state.accent:'en-US';rate=[...SPEECH_RATES,.7,.9,1.1].includes(state.rate)?state.rate:1;
+  hideAllChinese=state.hideAllChinese===true;chineseOverrides.clear();for(const [id,hidden] of Object.entries(state.chineseOverrides||{}))if(typeof hidden==='boolean')chineseOverrides.set(id,hidden);
+  voicePreferences=state.voicePreferences||{};
+ }
+ if(accountSwitch||oldFolder!==activeFolderId){exampleStates.clear();restoreView();}
+ $('reading-error').textContent='';
+ $('us').classList.toggle('selected',accent==='en-US');$('uk').classList.toggle('selected',accent==='en-GB');$('us').setAttribute('aria-pressed',String(accent==='en-US'));$('uk').setAttribute('aria-pressed',String(accent==='en-GB'));$('speed').value=String(rate);updateVoice();render({saved:accountSwitch||oldFolder!==activeFolderId});
 }
 const currentFolder=()=>folders.find(f=>f.id===activeFolderId);
 function voice(){const voices=matchingVoices(window.speechSynthesis?.getVoices()||[],accent);return voices.find(v=>voiceId(v)===voicePreferences[accent])||voices.find(v=>!speechPlayer.failed.has(voiceId(v)))||null;}
@@ -87,7 +106,7 @@ function startReading(mode){
 $('read-forward').onclick=()=>startReading('forward');$('read-reverse').onclick=()=>startReading('reverse');$('read-range').onclick=()=>startReading('range');
 $('stop-reading').onclick=()=>stop();$('resume-reading').onclick=()=>readingQueue.resume();
 $('reading-range').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();startReading('range');}});
-$('reading-range').oninput=()=>{$('reading-error').textContent='';};
+$('reading-range').oninput=()=>{$('reading-error').textContent='';savePreferences();};
 window.addEventListener('resize',()=>{if(readingQueue.active)paintPlaying(true);});
 function stop() { readingQueue.stop();playing = null;paintPlaying(); }
 function speak(word) {
@@ -95,7 +114,7 @@ function speak(word) {
 }
 function speakText(text,id) {
  readingQueue.stop();
- playing=id;render();speechPlayer.play(text,{lang:accent,rate,preferred:voicePreferences[accent]||''});
+ playing=id;paintPlaying();speechPlayer.play(text,{lang:accent,rate,preferred:voicePreferences[accent]||''});
 }
 const speaker = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 8c3 2 3 6 0 8M20 5c5 4 5 10 0 14"/></svg>';
 const hiddenChinese=id=>chineseOverrides.has(id)?chineseOverrides.get(id):hideAllChinese;
@@ -108,7 +127,7 @@ function ensureVisibleDefinitions(){
  while(low<high){const mid=(low+high)>>1;if(rows[mid].getBoundingClientRect().bottom<box.top-120)low=mid+1;else high=mid;}
  for(let i=low;i<rows.length&&i<low+20;i++){const row=rows[i];if(row.getBoundingClientRect().top>box.bottom+120)break;const word=words.find(w=>w.id===row.dataset.wordId);if(word&&!definitions.has(word.text.toLowerCase()))enrich(word);}
 }
-$('word-list').addEventListener('scroll',()=>{if(definitionFrame===null)definitionFrame=requestAnimationFrame(()=>{definitionFrame=null;ensureVisibleDefinitions();});},{passive:true});
+$('word-list').addEventListener('scroll',()=>{savePreferences();if(definitionFrame===null)definitionFrame=requestAnimationFrame(()=>{definitionFrame=null;ensureVisibleDefinitions();});},{passive:true});
 window.addEventListener('online',()=>{for(const [key,state] of definitions)if(state.status==='error')definitions.delete(key);ensureVisibleDefinitions();});
 async function enrich(w,retry=false){
  const key=w.text.toLowerCase();let state=definitions.get(key);
@@ -155,7 +174,7 @@ function paintExamples(w,row){
  if(state.status==='ready')area.append(element('p','example-message',`随机选自双语例句库 · 当前有 ${state.pool.length} 句可选${state.pool.length<=2?'，已全部展示':''}`));
  const collapse=element('button','text-button','收起例句');collapse.onclick=()=>{exampleStates.delete(w.text.toLowerCase());render();};area.append(collapse);row.append(area);
 }
-function switchFolder(id){readingQueue.reset();playing=null;activeFolderId=id;exampleStates.clear();$('search').value='';$('reading-error').textContent='';$('reading-range').value='';$('word-list').scrollTop=0;persist();render();}
+function switchFolder(id){rememberView();readingQueue.reset();playing=null;activeFolderId=id;exampleStates.clear();restoreView();$('reading-error').textContent='';render({saved:true});rememberView();persist();}
 function renderFolders(){
  const active=document.createDocumentFragment(),archived=document.createDocumentFragment();
  for(const folder of folders){
@@ -197,8 +216,9 @@ $('delete-folder-confirm').onclick=()=>{
  const removed=folderWords(words,folder.id),wasActive=activeFolderId===folder.id;
  ({folders,words,activeFolderId}=deleteFolder({folders,words,activeFolderId},folder.id));
  for(const word of removed)chineseOverrides.delete(word.id);
- if(wasActive){readingQueue.reset();playing=null;exampleStates.clear();$('search').value='';$('reading-error').textContent='';$('reading-range').value='';}
- persist();render();$('confirm-delete-folder').close();notice(`已删除“${folder.name}”${removed.length?`及其中的 ${removed.length} 个单词`:''}。`);
+ delete uiPreferences.views[folder.id];
+ if(wasActive){readingQueue.reset();playing=null;exampleStates.clear();restoreView();$('reading-error').textContent='';}
+ persist();render({saved:wasActive});$('confirm-delete-folder').close();notice(`已删除“${folder.name}”${removed.length?`及其中的 ${removed.length} 个单词`:''}。`);
 };
 function nameError(name,id=null){if(!name)return '请给文件夹起个名字。';if(folders.some(f=>f.id!==id&&f.name.toLocaleLowerCase()===name.toLocaleLowerCase()))return '已有同名文件夹，请换个名字；已归档的文件夹可直接恢复。';return '';}
 function openFolderDialog(id=null){
@@ -213,7 +233,8 @@ $('save-folder').onclick=()=>{
 };
 $('folder-name-input').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();$('save-folder').click();}});
 $('restore-current').onclick=()=>{if(currentFolder())setArchived(activeFolderId,false);};
-function render() {
+function render({reset=false,saved=false}={}) {
+ const list=$('word-list'),position=reset?null:saved?uiPreferences.views[activeFolderId]?.position:captureListPosition(list);
  observer.disconnect();
  const folder=currentFolder(),current=folderWords(words,activeFolderId),archived=folder?.archived===true;
  renderFolders();$('folder-title').textContent=folder?.name||'选择或新建文件夹';$('archived-banner').hidden=!archived;
@@ -245,13 +266,17 @@ function render() {
  });$('word-list').replaceChildren(frag);
  for(const w of shown){const row=rowsById.get(w.id);if(definitions.has(w.text.toLowerCase()))paintDefinition(w,row);else observer.observe(row);}
  $('toggle-all-chinese').textContent=hideAllChinese?'显示全部中文':'隐藏全部中文';$('toggle-all-chinese').setAttribute('aria-pressed',String(hideAllChinese));
- updateReadingControls();paintPlaying();ensureVisibleDefinitions();
+ updateReadingControls();restoreListPosition(list,position);paintPlaying();ensureVisibleDefinitions();
 }
 $('toggle-all-chinese').onclick=()=>{hideAllChinese=!hideAllChinese;chineseOverrides.clear();persist();render();};
 function selectAccent(value) { stop();accent=value;$('us').classList.toggle('selected',value==='en-US');$('uk').classList.toggle('selected',value==='en-GB');$('us').setAttribute('aria-pressed',String(value==='en-US'));$('uk').setAttribute('aria-pressed',String(value==='en-GB'));updateVoice();persist(); }
 $('us').onclick=()=>selectAccent('en-US');$('uk').onclick=()=>selectAccent('en-GB');
 const rates=[...new Set([...SPEECH_RATES,rate])].sort((a,b)=>a-b);$('speed').replaceChildren(...rates.map(value=>{const option=element('option','',`${value}×`);option.value=String(value);return option;}));$('speed').value=String(rate);$('speed').onchange=()=>{stop();rate=Number($('speed').value);persist();};
-$('search').oninput=$('sort').onchange=()=>{readingQueue.reset();render();};
+$('search').oninput=()=>{readingQueue.reset();render({reset:true});rememberView();savePreferences();};
+$('sort').onchange=()=>{uiPreferences.sort=$('sort').value;readingQueue.reset();render({reset:true});rememberView();persistPreferences();};
+for(const key of ['layout','extract'])$(key).addEventListener('change',()=>{uiPreferences[key]=$(key).value;persistPreferences();});
+for(const detail of document.querySelectorAll('details[id]'))detail.addEventListener('toggle',()=>{if(uiPreferences.details[detail.id]!==detail.open){uiPreferences.details[detail.id]=detail.open;savePreferences();}});
+window.addEventListener('pagehide',flushPreferences);
 function updateReviewSummary(){
  const {entries,invalid}=parseEntryInput($('review-text').value);
  $('review-input-summary').textContent=$('review-text').value.trim()?`已识别 ${entries.length} 个词条${invalid.length?`，${invalid.length} 项需要修改`:'，重复项已自动合并'}。`:'';
@@ -279,6 +304,7 @@ function updateFileColumns(){
  for(const [value,label] of [['auto','自动选择英文词列'],['all','所有列']]){const option=element('option','',label);option.value=value;$('file-column').append(option);}
  let width=0;for(const s of selected)for(const row of s.rows)width=Math.max(width,row.length);
  for(let i=0;i<Math.min(width,100);i++){const option=element('option','',`第 ${i+1} 列`);option.value=String(i);$('file-column').append(option);}
+ $('file-column').value=[...$('file-column').options].some(o=>o.value===uiPreferences.fileColumn)?uiPreferences.fileColumn:'auto';
 }
 function updateFileReview(){
  if(!fileReview)return;
@@ -288,8 +314,9 @@ function updateFileReview(){
   $('file-summary').textContent=`提取到 ${entries.length} 个词条，已去重${fileReview.scannedPages?`；${fileReview.scannedPages} 页使用图片识别`:''}。${entries.length?'可在下方修改后添加。':'请换一列或提取方式，再检查文件内容。'}`;
  }catch(error){$('review-text').value='';updateReviewSummary();$('file-summary').textContent=error.message;}
 }
-$('file-source').onchange=()=>{updateFileColumns();updateFileReview();};
-$('file-column').onchange=$('file-mode').onchange=updateFileReview;
+$('file-source').onchange=()=>{uiPreferences.fileSourceName=$('file-source').value==='all'?'':fileReview.sources[Number($('file-source').value)]?.name||'';updateFileColumns();updateFileReview();persistPreferences();};
+$('file-column').onchange=()=>{uiPreferences.fileColumn=$('file-column').value;updateFileReview();persistPreferences();};
+$('file-mode').onchange=()=>{uiPreferences.fileMode=$('file-mode').value;updateFileReview();persistPreferences();};
 function cancelDocument(){documentAbort?.abort();documentAbort=null;$('document-loading').close();$('import-document').disabled=false;}
 $('document-cancel').onclick=cancelDocument;
 $('document-loading').addEventListener('cancel',event=>{event.preventDefault();cancelDocument();});
@@ -309,7 +336,8 @@ async function importDocument(file){
   $('review-title').textContent='校对文件词表';$('review-tip').textContent=`来自：${file.name}。请核对英文词条；原文件不会上传。切换下方选项会重新提取并替换下方清单。`;
   $('file-source').replaceChildren();const all=element('option','','全部内容');all.value='all';$('file-source').append(all);
   data.sources.forEach((s,i)=>{const option=element('option','',s.name);option.value=String(i);$('file-source').append(option);});
-  $('file-source-wrap').hidden=data.sources.length<2;$('file-mode').value='entries';$('file-review-options').hidden=false;updateFileColumns();updateFileReview();
+  const rememberedSource=data.sources.findIndex(s=>s.name===uiPreferences.fileSourceName);$('file-source').value=rememberedSource>=0?String(rememberedSource):'all';
+  $('file-source-wrap').hidden=data.sources.length<2;$('file-mode').value=uiPreferences.fileMode;$('file-review-options').hidden=false;updateFileColumns();updateFileReview();
  }catch(error){if(documentAbort===controller&&!controller.signal.aborted){$('document-error').textContent=error.message||'导入失败，请检查文件格式后重试。';$('document-error').hidden=false;}}
  finally{if(documentAbort===controller){documentAbort=null;$('import-document').disabled=false;$('document-loading').close();}}
 }
@@ -377,5 +405,5 @@ $('test-voice').onclick=()=>speakText('Hello! This is your English pronunciation
 $('stop-voice').onclick=()=>{stop();updateVoice();};
 $('refresh-voices').onclick=()=>{speechPlayer.failed.clear();updateVoice();notice('已重新读取设备声音列表。');};
 window.speechSynthesis?.addEventListener('voiceschanged',updateVoice);window.addEventListener('pagehide',()=>{readingQueue.stop();worker?.terminate();documentAbort?.abort();});
-selectAccent(accent);render();
-if(profileStore)accountController=setupAccount({store:profileStore,getState:appState,applyState:applyAccountState,notice});
+selectAccent(accent);render({saved:true});
+if(profileStore)accountController=setupAccount({store:profileStore,getState:appState,applyState:applyAccountState,notice,beforeSwitch:flushPreferences});

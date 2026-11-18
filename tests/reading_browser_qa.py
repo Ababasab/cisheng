@@ -49,7 +49,7 @@ with sync_playwright() as p:
  expect(page.locator('.word-row').filter(has=page.get_by_text('zebra',exact=True)).locator('.word-number')).to_have_text('1.')
  page.get_by_role('button',name='删除 banana',exact=True).click()
  page.locator('#manual').click();page.locator('#review-text').fill('cat');page.locator('#save-review').click()
- expect(page.locator('.word-number')).to_have_text(['1.','2.','3.']);page.reload();expect(page.locator('.word-number')).to_have_text(['1.','2.','3.']);expect(page.locator('.word-text')).to_have_text(['apple','cat','zebra']);page.locator('#sort').select_option('original');expect(page.locator('.word-text')).to_have_text(['zebra','apple','cat'])
+ expect(page.locator('.word-number')).to_have_text(['1.','2.','3.']);page.reload();expect(page.locator('.word-number')).to_have_text(['1.','2.','3.']);expect(page.locator('#sort')).to_have_value('original');expect(page.locator('.word-text')).to_have_text(['zebra','apple','cat']);page.locator('#sort').select_option('az');expect(page.locator('.word-text')).to_have_text(['apple','cat','zebra']);page.locator('#sort').select_option('original')
  page.locator('#read-forward').click();page.evaluate("__current.onerror({error:'audio-hardware'})")
  expect(page.locator('#reading-progress')).to_contain_text('已停止');expect(page.locator('#stop-reading')).to_be_disabled()
  before=page.evaluate('__spoken.length');page.wait_for_timeout(450);assert page.evaluate('__spoken.length')==before

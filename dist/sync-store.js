@@ -12,14 +12,22 @@ export class ProfileStore{
   if(previous){
    const cached=read(this.storage,PREFIX+previous,null),latest=read(this.storage,DATA_KEY,null);
    if(latest)this.writeAccount(previous,{...(cached||{base:null,revision:0}),current:latest});
-   this.storage.setItem(DATA_KEY,JSON.stringify(read(this.storage,GUEST,{})));this.storage.removeItem(OWNER);
+   // Return the guest view while Auth initializes, without logging other open tabs out.
+   return read(this.storage,GUEST,{});
   }
   return read(this.storage,DATA_KEY,{});
  }
  save(state){
+  const owner=this.storage.getItem(OWNER)||null;
+  if(this.owner&&owner!==this.owner)throw Error('本机账号已变更，请刷新后再保存。');
+  if(!this.owner&&owner){this.storage.setItem(GUEST,JSON.stringify(state));return;}
   this.storage.setItem(DATA_KEY,JSON.stringify(state));
   if(this.owner){const cached=this.account();this.writeAccount(this.owner,{...cached,current:state});}
   else this.storage.setItem(GUEST,JSON.stringify(state));
+ }
+ savePreferences(preferences){
+  const state=this.owner?this.account().current:read(this.storage,GUEST,read(this.storage,DATA_KEY,{}));
+  this.save({...state,uiPreferences:preferences});
  }
  account(){return read(this.storage,PREFIX+this.owner,{current:{},base:null,revision:0});}
  writeAccount(owner,state){this.storage.setItem(PREFIX+owner,JSON.stringify(state));}
@@ -34,5 +42,5 @@ export class ProfileStore{
  leave(){
   this.owner=null;this.storage.removeItem(OWNER);const guest=read(this.storage,GUEST,{});this.storage.setItem(DATA_KEY,JSON.stringify(guest));return guest;
  }
- synchronized(base,revision,current){this.writeAccount(this.owner,{...this.account(),base,revision,current});this.storage.setItem(DATA_KEY,JSON.stringify(current));}
+ synchronized(base,revision,current){if(!this.owner||(this.storage.getItem(OWNER)||null)!==this.owner)throw Error('本机账号已变更，请重新登录后同步。');this.writeAccount(this.owner,{...this.account(),base,revision,current});this.storage.setItem(DATA_KEY,JSON.stringify(current));}
 }
