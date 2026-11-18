@@ -139,3 +139,8 @@ main a { color: var(--theme-accent, #244f42); }
 .account-links button { font-size: 12px; }
 #account-email-display,#account-message,#sync-status { overflow-wrap: anywhere; font-size: 13px; line-height: 1.8; }
 @media(max-width:650px){.header-tools { gap: 8px; }.account-open { font-size: 11px; padding: 8px; }.theme-picker select { max-width: 90px; }.brand { gap: 7px; }}
+
+.folder-delete { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 6px; border: 0; background: transparent; color: var(--theme-muted, #839474); border-radius: 5px; }
+.folder-delete:hover { color: var(--theme-error, #a4422e); background: var(--theme-selected, #e0e9d7); }
+#delete-folder-summary,#delete-folder-sync { overflow-wrap: anywhere; line-height: 1.8; }
+@media(max-width:650px){.folder-delete{padding:8px}}

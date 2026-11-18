@@ -24,7 +24,7 @@ export function mergeInitial(local,remote,createId=()=>crypto.randomUUID()){
  local=snapshotOf(local);remote=copy(snapshotOf(remote));
  const aliases=new Map(),folderIds=new Set(remote.folders.map(f=>f.id)),wordIds=new Set(remote.words.map(w=>w.id));
  for(const f of local.folders){
-  if(!local.words.length&&local.folders.length===1&&f.id==='default'&&f.name==='默认单词本'&&remote.folders.length)continue;
+  if(!local.words.length&&local.folders.length===1&&f.id==='default'&&f.name==='默认单词本')continue;
   const found=remote.folders.find(r=>r.name.toLocaleLowerCase()===f.name.toLocaleLowerCase());
   const id=found?.id||(folderIds.has(f.id)?createId():f.id);aliases.set(f.id,id);
   if(!found){remote.folders.push({...f,id});folderIds.add(id);}

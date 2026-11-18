@@ -3,7 +3,7 @@ import { cleanEntries, extractWords, extractHeadwords, visibleWords,parseEntryIn
 import { findColumns, headwordInset, colouredText, removeTableRules } from './layout.js';
 import {readOcrEntries,mergeOcrEntries} from './ocr-entries.js';
 import { lookupWord, loadExamples, pickExamples } from './learning.js';
-import {migrateFolders,folderWords,addToFolder,folderName} from './folders.js';
+import {migrateFolders,folderWords,addToFolder,folderName,deleteFolder} from './folders.js';
 import {SpeechPlayer,matchingVoices,voiceId} from './speech.js';
 import {OcrWorker,loadingProgress} from './ocr.js';
 import {documentType,extractFileEntries} from './file-words.js';
@@ -16,7 +16,7 @@ let words = [], accent = 'en-US', rate = 1, worker = null, ocrRun = 0, editing =
 let noticeTimer;
 let profileStore=null,accountController=null;
 let voicePreferences={};
-let folders=[],activeFolderId=null,editingFolderId=null,clearFolderId=null;
+let folders=[],activeFolderId=null,editingFolderId=null,clearFolderId=null,deleteFolderId=null,deleteFolderVersion=null;
 let hideAllChinese=false;
 let documentAbort=null,fileReview=null,readingSpeechPhase='loading';
 const chineseOverrides=new Map(),definitions=new Map(),exampleStates=new Map();
@@ -29,7 +29,7 @@ function appState(){return {schemaVersion:3,folders,activeFolderId,words,accent,
 function persist() { try {if(profileStore)profileStore.save(appState());else localStorage.setItem(KEY,JSON.stringify(appState()));accountController?.changed();} catch { notice('浏览器未能保存记录，请导出单词备份。'); } }
 function applyAccountState(state,accountSwitch=false){
  readingQueue.reset();playing=null;
- if(accountSwitch){cancelOCR();cancelDocument();clearFolderId=null;editing=null;editingFolderId=null;}
+ if(accountSwitch){cancelOCR();cancelDocument();clearFolderId=null;deleteFolderId=null;deleteFolderVersion=null;editing=null;editingFolderId=null;}
  const oldFolder=activeFolderId;({folders,words,activeFolderId}=migrateFolders(state));
  if(!accountSwitch&&folders.some(f=>f.id===oldFolder))activeFolderId=oldFolder;
  accent=['en-US','en-GB'].includes(state.accent)?state.accent:'en-US';rate=[...SPEECH_RATES,.7,.9,1.1].includes(state.rate)?state.rate:1;
@@ -164,7 +164,8 @@ function renderFolders(){
   select.append(element('span','folder-icon',folder.archived?'▤':'▱'),element('span','folder-name',folder.name),element('span','folder-count',String(folderWords(words,folder.id).length)));select.onclick=()=>switchFolder(folder.id);
   const rename=element('button','folder-rename','✎');rename.setAttribute('aria-label',`重命名文件夹 ${folder.name}`);rename.title='重命名';rename.onclick=()=>openFolderDialog(folder.id);
   const archive=element('button','folder-archive',folder.archived?'↶':'↓');archive.setAttribute('aria-label',`${folder.archived?'恢复':'归档'}文件夹 ${folder.name}`);archive.title=folder.archived?'恢复':'归档';archive.onclick=()=>setArchived(folder.id,!folder.archived);
-  row.append(select,rename,archive);(folder.archived?archived:active).append(row);
+  const remove=element('button','folder-delete');remove.setAttribute('aria-label',`删除文件夹 ${folder.name}`);remove.title='删除文件夹';remove.innerHTML='<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></svg>';remove.onclick=()=>openDeleteFolder(folder.id);
+  row.append(select,rename,archive,remove);(folder.archived?archived:active).append(row);
  }
  $('folder-list').replaceChildren(active);$('archived-folders').replaceChildren(archived);
  $('no-folders').hidden=folders.some(f=>!f.archived);$('archived-count').textContent=folders.filter(f=>f.archived).length;
@@ -176,6 +177,29 @@ function setArchived(id,archived){
  else switchFolder(id);
  persist();render();notice(archived?`已归档“${folder.name}”，词汇仍保留。`:`已恢复“${folder.name}”。`);
 }
+function folderVersion(folder){return JSON.stringify([folder.name,folderWords(words,folder.id).map(w=>[w.id,w.text]).sort((a,b)=>a[0].localeCompare(b[0]))]);}
+function showDeleteFolder(folder){
+ const count=folderWords(words,folder.id).length;
+ $('delete-folder-title').textContent=`删除“${folder.name}”？`;
+ $('delete-folder-summary').textContent=count?`将同时删除其中的 ${count} 个单词，删除后无法恢复。`:'这是一个空文件夹，删除不会影响其他文件夹。';
+ $('delete-folder-sync').hidden=!profileStore?.owner;deleteFolderVersion=folderVersion(folder);
+}
+function openDeleteFolder(id){
+ if(profileStore?.owner&&profileStore.account().base===null)return notice('请等待首次同步完成后再删除文件夹。');
+ const folder=folders.find(f=>f.id===id);if(!folder)return;
+ deleteFolderId=id;showDeleteFolder(folder);$('confirm-delete-folder').returnValue='cancel';$('confirm-delete-folder').showModal();
+}
+$('confirm-delete-folder').addEventListener('close',()=>{deleteFolderId=null;deleteFolderVersion=null;});
+$('delete-folder-confirm').onclick=()=>{
+ const folder=folders.find(f=>f.id===deleteFolderId);
+ if(!folder){$('confirm-delete-folder').close();return notice('这个文件夹已经删除。');}
+ if(folderVersion(folder)!==deleteFolderVersion){showDeleteFolder(folder);return notice('文件夹内容已更新，请核对后再次确认删除。');}
+ const removed=folderWords(words,folder.id),wasActive=activeFolderId===folder.id;
+ ({folders,words,activeFolderId}=deleteFolder({folders,words,activeFolderId},folder.id));
+ for(const word of removed)chineseOverrides.delete(word.id);
+ if(wasActive){readingQueue.reset();playing=null;exampleStates.clear();$('search').value='';$('reading-error').textContent='';$('reading-range').value='';}
+ persist();render();$('confirm-delete-folder').close();notice(`已删除“${folder.name}”${removed.length?`及其中的 ${removed.length} 个单词`:''}。`);
+};
 function nameError(name,id=null){if(!name)return '请给文件夹起个名字。';if(folders.some(f=>f.id!==id&&f.name.toLocaleLowerCase()===name.toLocaleLowerCase()))return '已有同名文件夹，请换个名字；已归档的文件夹可直接恢复。';return '';}
 function openFolderDialog(id=null){
  editingFolderId=id;const folder=folders.find(f=>f.id===id);$('folder-dialog-title').textContent=folder?'重命名文件夹':'新建文件夹';$('folder-name-input').value=folder?.name||'';$('folder-name-error').textContent='';$('folder-dialog').showModal();$('folder-name-input').focus();$('folder-name-input').select();

@@ -8,7 +8,9 @@ export function migrateFolders(stored={}){
   folders.push({id:folder.id,name:folderName(folder.name),archived:folder.archived===true,nextNumber:Number.isSafeInteger(folder.nextNumber)&&folder.nextNumber>0?folder.nextNumber:1});ids.add(folder.id);
  }
  const words=(Array.isArray(stored.words)?stored.words:[]).filter(w=>w&&typeof w.id==='string'&&typeof w.text==='string'&&cleanEntries(w.text).length===1).map(w=>({...w}));
- const needsDefault=!folders.length||words.some(w=>!ids.has(w.folderId));
+ // A deliberately emptied folder list must stay empty after deleting the last folder.
+ const explicitlyEmpty=Array.isArray(stored.folders)&&stored.folders.length===0&&words.length===0;
+ const needsDefault=(!folders.length&&!explicitlyEmpty)||words.some(w=>!ids.has(w.folderId));
  if(needsDefault&&!ids.has(DEFAULT_FOLDER_ID)){folders.unshift({id:DEFAULT_FOLDER_ID,name:'默认单词本',archived:false,nextNumber:1});ids.add(DEFAULT_FOLDER_ID);}
  for(const word of words)if(!ids.has(word.folderId))word.folderId=DEFAULT_FOLDER_ID;
  // Preserve valid existing numbers; assign legacy/invalid entries in import order.
@@ -20,6 +22,12 @@ export function migrateFolders(stored={}){
  return {folders,words,activeFolderId};
 }
 export function folderWords(words,folderId){return words.filter(w=>w.folderId===folderId);}
+export function deleteFolder(state,folderId){
+ if(!state.folders.some(f=>f.id===folderId))return state;
+ const folders=state.folders.filter(f=>f.id!==folderId),words=state.words.filter(w=>w.folderId!==folderId);
+ const activeFolderId=state.activeFolderId===folderId?(folders.find(f=>!f.archived)?.id||folders[0]?.id||null):state.activeFolderId;
+ return {...state,folders,words,activeFolderId};
+}
 export function addToFolder(words,entries,folderId,createId=()=>crypto.randomUUID(),firstNumber=1){
  const keys=new Set(folderWords(words,folderId).map(w=>w.text.toLowerCase()));const added=[];
  let next=Number.isSafeInteger(firstNumber)&&firstNumber>0?firstNumber:1;

@@ -24,6 +24,12 @@ test('three-way merge preserves independent offline edits and deletions do not r
  remote.words=[];assert.deepEqual(mergeSnapshots(base,base,remote).words,[]);
  remote.folders=[];assert.deepEqual(mergeSnapshots(base,local,remote),{folders:[],words:[]});
 });
+test('deleted last folder cannot reappear from a stale device or an unused default guest folder',()=>{
+ const base=state(['apple']),removed={folders:[],words:[]},stale=structuredClone(base);
+ stale.words.push({id:'late',text:'banana',folderId:'default',number:2});
+ const merged=mergeSnapshots(base,stale,removed);assert.deepEqual(merged,removed);assert.deepEqual(mergeSnapshots(base,removed,stale),removed);
+ assert.deepEqual(mergeInitial(state([]),removed),removed);
+});
 test('simultaneous additions deduplicate by word inside one folder while preserving other folders',()=>{
  const base=state([]),local=state(['apple']),remote=state(['apple']);remote.words[0].id='remote';
  assert.equal(mergeSnapshots(base,local,remote).words.length,1);

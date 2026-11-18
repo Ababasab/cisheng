@@ -36,6 +36,18 @@ try:
   computer.locator('#manual').click();computer.locator('#review-text').fill('concert');computer.locator('#save-review').click();expect(computer.locator('#sync-status')).to_have_text('已同步',timeout=30000)
   sync(phone);assert set(words(phone))=={'apple','banana','concert'}
   phone.get_by_role('button',name='删除 apple',exact=True).click();expect(phone.locator('#sync-status')).to_have_text('已同步',timeout=30000);sync(computer);assert set(words(computer))=={'banana','concert'}
+  # Folder deletion includes contents; another device cannot restore it from a stale draft.
+  computer.locator('#new-folder').click();computer.locator('#folder-name-input').fill('临时同步目录');computer.locator('#save-folder').click()
+  computer.locator('#manual').click();computer.locator('#review-text').fill('journey');computer.locator('#save-review').click();expect(computer.locator('#sync-status')).to_have_text('已同步',timeout=30000);sync(phone)
+  phone.get_by_role('button',name='删除文件夹 临时同步目录',exact=True).click();expect(phone.locator('#delete-folder-summary')).to_contain_text('1 个单词')
+  computer.locator('#manual').click();computer.locator('#review-text').fill('garden');computer.locator('#save-review').click();expect(computer.locator('#sync-status')).to_have_text('已同步',timeout=30000)
+  phone.evaluate('window.dispatchEvent(new Event("online"))');expect(phone.locator('[data-folder-id]').filter(has_text='临时同步目录').locator('.folder-count')).to_have_text('2',timeout=30000)
+  phone.locator('#delete-folder-confirm').click();expect(phone.locator('#confirm-delete-folder')).to_be_visible();expect(phone.locator('#delete-folder-summary')).to_contain_text('2 个单词')
+  phone.locator('#delete-folder-confirm').click();expect(phone.locator('#sync-status')).to_have_text('已同步',timeout=30000);sync(computer)
+  assert computer.get_by_role('button',name='打开文件夹 临时同步目录',exact=True).count()==0;assert set(words(computer))=={'banana','concert'}
+  phone.get_by_role('button',name='删除文件夹 云同步测试',exact=True).click();phone.locator('#delete-folder-confirm').click();expect(phone.locator('#sync-status')).to_have_text('已同步',timeout=30000);sync(computer)
+  assert computer.locator('.folder-item').count()==0;computer.reload();expect(computer.locator('#sync-status')).to_have_text('已同步',timeout=30000);assert computer.locator('.folder-item').count()==0
+  fresh=b.new_context();new_device=start(fresh,{'schemaVersion':3,'folders':[{'id':'default','name':'默认单词本'}],'words':[]});login(new_device,*accounts[0]);assert new_device.locator('.folder-item').count()==0;fresh.close()
   computer.locator('#account-open').click();computer.locator('#account-signout').click();expect(computer.locator('#account-auth')).to_be_visible(timeout=20000);assert words(computer)==['banana'];computer.locator('#account-close').click()
   login(computer,*accounts[1]);assert words(computer)==['banana']
   # Bypass UI filters deliberately: actual database RLS must still isolate users.
@@ -54,7 +66,7 @@ try:
   assert not errors,errors
   assert phone.evaluate('document.documentElement.scrollWidth<=innerWidth')
   b.close()
- print('PASS: LIVE Supabase Auth + PostgreSQL RPC/RLS; two browser profiles merged, added/deleted words propagated, signout and separate accounts isolated. Phone viewport; not physical iPhone or mainland no-VPN test.')
+ print('PASS: LIVE Supabase Auth + PostgreSQL RPC/RLS; two browser profiles merged, word/folder deletions propagated, changed-content reconfirmation, empty folder state survives reload/new device, signout and separate accounts isolated. Phone viewport; not physical iPhone or mainland no-VPN test.')
 except Exception as error:
  message=str(error)
  for email,password in locals().get('accounts',[]):message=message.replace(password,'[test password redacted]').replace(email,'[temporary QA email]')
