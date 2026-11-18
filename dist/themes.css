@@ -126,3 +126,16 @@ main a { color: var(--theme-accent, #244f42); }
   .theme-picker { gap: 6px; font-size: 11px; }
   .theme-picker select { padding: 8px 5px; max-width: 130px; font-size: 12px; }
 }
+
+/* Account controls use the existing three themes. */
+.header-tools { gap: 12px; }
+.account-open { white-space: nowrap; font-size: 12px; }
+#account-dialog { width: min(420px, calc(100vw - 32px)); box-sizing: border-box; padding: 24px; }
+.account-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.account-heading h2 { margin: 0 0 12px; }
+#account-form input { box-sizing: border-box; width: 100%; margin: 8px 0 16px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--theme-soft, #f7faf2); color: var(--theme-text, #263c34); }
+.account-submit { width: 100%; padding: 12px; margin-top: 6px; }
+.account-links { display: flex; justify-content: space-between; gap: 12px; margin-top: 14px; }
+.account-links button { font-size: 12px; }
+#account-email-display,#account-message,#sync-status { overflow-wrap: anywhere; font-size: 13px; line-height: 1.8; }
+@media(max-width:650px){.header-tools { gap: 8px; }.account-open { font-size: 11px; padding: 8px; }.theme-picker select { max-width: 90px; }.brand { gap: 7px; }}

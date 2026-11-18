@@ -1,0 +1,12 @@
+project_id = "cisheng"
+
+[auth]
+site_url = "https://ababasab.github.io/cisheng/"
+additional_redirect_urls = ["https://ababasab.github.io/cisheng/", "http://127.0.0.1:4184/"]
+enable_signup = true
+minimum_password_length = 8
+password_requirements = "letters_digits"
+
+[auth.email]
+enabled = true
+enable_confirmations = true

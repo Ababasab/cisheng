@@ -6,3 +6,9 @@ data-cache/
 
 # Local publishing handoff
 继续发布.md
+
+# Supabase local CLI metadata and environment secrets
+supabase/.temp/
+supabase/.branches/
+.env
+.env.*

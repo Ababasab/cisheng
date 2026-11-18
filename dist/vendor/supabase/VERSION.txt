@@ -1,0 +1,3 @@
+@supabase/supabase-js 2.119.0
+Source: https://registry.npmjs.org/@supabase/supabase-js/-/supabase-js-2.119.0.tgz
+Integrity: sha512-MKP49G6bJbPhvsZDegZ/IXS/ITApPgplDCF5+F65KZ5kIArS5Y90WFxwvWYALx2bsxdrSuHvkCiXHYr3dU8+sw==

@@ -8,20 +8,35 @@ import {SpeechPlayer,matchingVoices,voiceId} from './speech.js';
 import {OcrWorker,loadingProgress} from './ocr.js';
 import {documentType,extractFileEntries} from './file-words.js';
 import {ReadingQueue,readingList,numberedWords,SPEECH_RATES} from './reading.js';
+import {ProfileStore} from './sync-store.js';
+import {setupAccount} from './account.js';
 const $ = id => document.getElementById(id);
 const KEY = 'word-notes-v1';
 let words = [], accent = 'en-US', rate = 1, worker = null, ocrRun = 0, editing = null, playing = null, previewURL = null;
 let noticeTimer;
+let profileStore=null,accountController=null;
 let voicePreferences={};
 let folders=[],activeFolderId=null,editingFolderId=null,clearFolderId=null;
 let hideAllChinese=false;
 let documentAbort=null,fileReview=null,readingSpeechPhase='loading';
 const chineseOverrides=new Map(),definitions=new Map(),exampleStates=new Map();
 function notice(text) { $('notice').textContent = text; $('notice').hidden = false; clearTimeout(noticeTimer); noticeTimer = setTimeout(() => $('notice').hidden = true, 5000); }
+try{profileStore=new ProfileStore(localStorage);profileStore.boot();}catch{notice('本机存储暂时不可用，请先导出单词备份。');}
 try { const stored = JSON.parse(localStorage.getItem(KEY) || '{}')||{};({folders,words,activeFolderId}=migrateFolders(stored));if(['en-US','en-GB'].includes(stored.accent)) accent = stored.accent; if([...SPEECH_RATES,.7,.9,1.1].includes(stored.rate)) rate=stored.rate; } catch {({folders,words,activeFolderId}=migrateFolders());notice('无法读取本地记录，请导出备份后继续使用。'); }
 try {const stored=JSON.parse(localStorage.getItem(KEY)||'{}');hideAllChinese=stored.hideAllChinese===true;for(const [id,hidden] of Object.entries(stored.chineseOverrides||{}))if(typeof hidden==='boolean')chineseOverrides.set(id,hidden);}catch{}
 try{const stored=JSON.parse(localStorage.getItem(KEY)||'{}');for(const lang of ['en-US','en-GB'])if(typeof stored?.voicePreferences?.[lang]==='string')voicePreferences[lang]=stored.voicePreferences[lang];}catch{}
-function persist() { try { localStorage.setItem(KEY, JSON.stringify({schemaVersion:3,folders,activeFolderId,words,accent,rate,hideAllChinese,chineseOverrides:Object.fromEntries(chineseOverrides),voicePreferences})); } catch { notice('浏览器未能保存记录，请导出单词备份。'); } }
+function appState(){return {schemaVersion:3,folders,activeFolderId,words,accent,rate,hideAllChinese,chineseOverrides:Object.fromEntries(chineseOverrides),voicePreferences};}
+function persist() { try {if(profileStore)profileStore.save(appState());else localStorage.setItem(KEY,JSON.stringify(appState()));accountController?.changed();} catch { notice('浏览器未能保存记录，请导出单词备份。'); } }
+function applyAccountState(state,accountSwitch=false){
+ readingQueue.reset();playing=null;
+ if(accountSwitch){cancelOCR();cancelDocument();clearFolderId=null;editing=null;editingFolderId=null;}
+ const oldFolder=activeFolderId;({folders,words,activeFolderId}=migrateFolders(state));
+ if(!accountSwitch&&folders.some(f=>f.id===oldFolder))activeFolderId=oldFolder;
+ accent=['en-US','en-GB'].includes(state.accent)?state.accent:'en-US';rate=[...SPEECH_RATES,.7,.9,1.1].includes(state.rate)?state.rate:1;
+ hideAllChinese=state.hideAllChinese===true;chineseOverrides.clear();for(const [id,hidden] of Object.entries(state.chineseOverrides||{}))if(typeof hidden==='boolean')chineseOverrides.set(id,hidden);
+ voicePreferences=state.voicePreferences||{};exampleStates.clear();$('search').value='';$('reading-error').textContent='';
+ $('us').classList.toggle('selected',accent==='en-US');$('uk').classList.toggle('selected',accent==='en-GB');$('us').setAttribute('aria-pressed',String(accent==='en-US'));$('uk').setAttribute('aria-pressed',String(accent==='en-GB'));$('speed').value=String(rate);updateVoice();render();
+}
 const currentFolder=()=>folders.find(f=>f.id===activeFolderId);
 function voice(){const voices=matchingVoices(window.speechSynthesis?.getVoices()||[],accent);return voices.find(v=>voiceId(v)===voicePreferences[accent])||voices.find(v=>!speechPlayer.failed.has(voiceId(v)))||null;}
 function updateVoice(){
@@ -339,3 +354,4 @@ $('stop-voice').onclick=()=>{stop();updateVoice();};
 $('refresh-voices').onclick=()=>{speechPlayer.failed.clear();updateVoice();notice('已重新读取设备声音列表。');};
 window.speechSynthesis?.addEventListener('voiceschanged',updateVoice);window.addEventListener('pagehide',()=>{readingQueue.stop();worker?.terminate();documentAbort?.abort();});
 selectAccent(accent);render();
+if(profileStore)accountController=setupAccount({store:profileStore,getState:appState,applyState:applyAccountState,notice});
