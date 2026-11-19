@@ -1,0 +1,2 @@
+# Keep pinned vendor bytes identical on Windows and the Linux Pages runner.
+dist/vendor/speech/** -text

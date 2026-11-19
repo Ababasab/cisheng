@@ -31,17 +31,17 @@ with sync_playwright() as p:
   page.locator('#uk').click();page.reload();expect(page.locator('#uk')).to_have_attribute('aria-pressed','true');expect(page.locator('#voice-choice')).to_have_value('__system__')
   # GB network failure retries GB local, never the US global default.
   page.locator('#voice-choice').select_option('uk-online');page.locator('#test-voice').click();page.evaluate('__current.onerror({error:"network"})');assert page.evaluate('__calls.slice(-2).map(x=>x.voice)')==['uk-online','uk'];page.evaluate('__finish()')
-  # Voice enumeration is asynchronous; wait instead of immediately speaking US.
-  page.evaluate('__voices=[];__voicesChanged()');before=page.evaluate('__calls.length');page.locator('#test-voice').click();page.evaluate('__voices=[__us,__uk];__voicesChanged()');expect(page.locator('#accent-status')).to_have_text('英式 · UK local');assert page.evaluate('__calls.length')==before+1;assert page.evaluate('__calls.at(-1).voice')=='uk';page.evaluate('__finish()')
-  # Only US remains: no speech request and clear missing-GB feedback.
-  page.evaluate('__voices=[__us];__voicesChanged()');before=page.evaluate('__calls.length');page.locator('#test-voice').click();expect(page.locator('#voice-status')).to_contain_text('未检测到英式（en-GB）',timeout=6000);assert page.evaluate('__calls.length')==before
-  expect(page.locator('#speech-help')).to_have_attribute('open','');expect(page.locator('#voice-info')).to_have_attribute('open','')
+  # An empty/delayed device list starts built-in GB; late list updates must not relabel playback.
+  page.evaluate('__voices=[];__voicesChanged()');before=page.evaluate('__calls.length');page.locator('#test-voice').click();page.evaluate('__voices=[__us,__uk];__voicesChanged()');expect(page.locator('#voice-status')).to_contain_text('播放完成',timeout=120000);expect(page.locator('#accent-status')).to_contain_text('网页英式');assert page.evaluate('__calls.length')==before
+  # Only US remains: generate real browser GB audio, never a US native request.
+  page.evaluate('__voices=[__us];__voicesChanged()');before=page.evaluate('__calls.length');page.locator('#test-voice').click();expect(page.locator('#voice-status')).to_contain_text('播放完成',timeout=120000);assert page.evaluate('__calls.length')==before
+  expect(page.locator('#accent-status')).to_contain_text('网页英式');assert '安装' not in page.locator('#voice-status').inner_text()
   # Installing a GB voice then refreshing restores playback without changing accent.
-  page.evaluate('__voices=[__us,__uk];__voicesChanged()');page.locator('#refresh-voices').click();page.locator('#test-voice').click();assert page.evaluate('__calls.at(-1).voice')=='uk';page.evaluate('__finish()')
+  page.evaluate('__voices=[__us,__uk];__voicesChanged()');page.locator('#speech-help').evaluate('el=>el.open=true');page.locator('#refresh-voices').click();page.locator('#test-voice').click();assert page.evaluate('__calls.at(-1).voice')=='uk';page.evaluate('__finish()')
   page.locator('#voice-info').evaluate('el=>el.open=false');page.locator('#speech-help').evaluate('el=>el.open=false');page.locator('#accent-status').scroll_into_view_if_needed();page.screenshot(path=str(out/f'voices-{width}.png'))
   for theme in ['codex','green','blue']:
    page.locator('#theme-choice').select_option(theme)
    for size in [390,320]:page.set_viewport_size({'width':size,'height':950});assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
   assert not errors,errors;context.close()
  b.close()
-print('PASS: US/GB voice objects differ for preview/word/sentence/batch; saved system choice scoped to accent; GB failure remains GB; async lists, missing-GB error, refresh recovery and mobile themes. Audio simulated.')
+print('PASS: US/GB bindings for preview/word/sentence/batch; saved accent choices; native failures stay within accent or use real browser synthesis; missing/delayed voices, refresh and mobile themes. Native voices simulated; built-in fallback uses actual models.')

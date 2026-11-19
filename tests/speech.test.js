@@ -34,3 +34,16 @@ test('failed voice identifiers are scoped to their accent when a browser reuses 
  const us={...local,voiceURI:'shared'},uk={name:'UK',lang:'en-GB',voiceURI:'shared'};const x=setup([us,uk]);x.player.play('US');x.calls[0].onerror({error:'network'});
  x.player.play('UK',{lang:'en-GB'});assert.equal(x.calls[1].voice,uk);x.player.cancel();
 });
+test('built-in fallback speaks the requested accent when no native voice exists, and stop cancels late events',()=>{
+ const x=setup([]),calls=[];x.player.fallback={unlock(){},cancel(){},play(text,options){calls.push({text,options});}};
+ x.player.play('water',{lang:'en-GB',rate:.25});assert.equal(x.calls.length,0);assert.equal(calls[0].options.lang,'en-GB');assert.equal(calls[0].options.rate,.25);
+ const stateCount=x.states.length;x.player.cancel();calls[0].options.onState('done',{voice:{name:'builtin'}});assert.equal(x.states.length,stateCount);
+});
+test('native voice failures use browser synthesis, and selecting built-in bypasses native voices',()=>{
+ const x=setup([local]),calls=[];x.player.fallback={unlock(){},cancel(){},play(text,options){calls.push({text,options});}};
+ x.player.play('passport');x.calls[0].onerror({error:'network'});assert.equal(calls.length,1);assert.equal(calls[0].options.lang,'en-US');
+ x.player.play('car',{lang:'en-GB',preferred:'__builtin__'});assert.equal(x.calls.length,1);assert.equal(calls.at(-1).options.lang,'en-GB');x.player.cancel();
+});
+test('built-in voice works even without the native speech API',()=>{
+ const calls=[];const x=new SpeechPlayer(null,null,()=>{},{fallback:{unlock(){},cancel(){},play(text,options){calls.push({text,options});}}});x.play('hello',{lang:'en-US'});assert.equal(calls[0].text,'hello');x.cancel();
+});
