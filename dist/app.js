@@ -5,7 +5,7 @@ import { findColumns, headwordInset, colouredText, removeTableRules } from './la
 import {readOcrEntries,mergeOcrEntries} from './ocr-entries.js';
 import { lookupWord, loadExamples, pickExamples } from './learning.js';
 import {migrateFolders,folderWords,addToFolder,folderName,deleteFolder} from './folders.js';
-import {SpeechPlayer,matchingVoices,voiceId} from './speech.js';
+import {SpeechPlayer,matchingVoices,orderedVoices,voiceId,accentLabel} from './speech.js';
 import {OcrWorker,loadingProgress} from './ocr.js';
 import {documentType,extractFileEntries} from './file-words.js';
 import {ReadingQueue,readingList,numberedWords,SPEECH_RATES} from './reading.js';
@@ -58,24 +58,25 @@ function applyAccountState(state,accountSwitch=false){
  $('us').classList.toggle('selected',accent==='en-US');$('uk').classList.toggle('selected',accent==='en-GB');$('us').setAttribute('aria-pressed',String(accent==='en-US'));$('uk').setAttribute('aria-pressed',String(accent==='en-GB'));$('speed').value=String(rate);updateVoice();render({saved:accountSwitch||oldFolder!==activeFolderId});
 }
 const currentFolder=()=>folders.find(f=>f.id===activeFolderId);
-function voice(){const voices=matchingVoices(window.speechSynthesis?.getVoices()||[],accent);return voices.find(v=>voiceId(v)===voicePreferences[accent])||voices.find(v=>!speechPlayer.failed.has(voiceId(v)))||null;}
+function voice(){return orderedVoices(window.speechSynthesis?.getVoices()||[],accent,voicePreferences[accent],speechPlayer.failed)[0]||null;}
+function showAccentVoice(v,message=''){$('accent-status').textContent=message||`${accentLabel(accent)} · ${v?.name||'尚未检测到对应声音'}`;$('accent-status').dataset.state=v?'ready':'missing';}
 function updateVoice(){
  const voices=matchingVoices(window.speechSynthesis?.getVoices()||[],accent);$('voice-choice').replaceChildren();
  const auto=document.createElement('option');auto.value='';auto.textContent='自动选择（本机语音优先）';$('voice-choice').append(auto);
- const system=document.createElement('option');system.value='__system__';system.textContent='浏览器默认英语声音';$('voice-choice').append(system);
+ const system=document.createElement('option');system.value='__system__';system.textContent='系统推荐（当前口音）';$('voice-choice').append(system);
  for(const v of voices){const option=document.createElement('option');option.value=voiceId(v);option.textContent=`${v.name} · ${v.localService===true?'本机':'在线/系统服务'}`;$('voice-choice').append(option);}
  $('voice-choice').value=voicePreferences[accent]==='__system__'||voices.some(v=>voiceId(v)===voicePreferences[accent])?voicePreferences[accent]:'';
- const v=voicePreferences[accent]==='__system__'?null:voice();$('voice-status').textContent=v?`当前声音：${v.name} · ${v.localService===true?'本机语音':'在线/系统服务，可能需要联网'}`:'将尝试浏览器默认英语声音；若无声，请选择其他声音或安装对应英语语音包。';
+ const v=voice();showAccentVoice(v);$('voice-status').textContent=v?`当前声音：${v.name} · ${v.lang} · ${v.localService===true?'本机语音':'在线/系统服务，可能需要联网'}`:`未检测到可用的${accentLabel(accent)}（${accent}）声音，请重新读取或安装对应英语语音包。`;
 }
 const speechPlayer=new SpeechPlayer(window.speechSynthesis,window.SpeechSynthesisUtterance,(state,detail)=>{
  if(readingQueue.active&&['loading','speaking','retry'].includes(state)){readingSpeechPhase=state;$('reading-current-label').textContent=state==='speaking'?'正在朗读':state==='retry'?'正在切换声音':'准备朗读';}
- if(state==='loading')$('voice-status').textContent=`正在准备：${detail.voice?.name||'浏览器默认英语声音'}…`;
- if(state==='speaking')$('voice-status').textContent=`正在朗读：${detail.voice?.name||'浏览器默认英语声音'}`;
+ if(state==='loading'){$('voice-status').textContent=detail.waitingVoices?`正在加载${accentLabel(accent)}声音列表…`:`正在准备：${detail.voice.name}…`;showAccentVoice(detail.voice,detail.waitingVoices?`正在加载${accentLabel(accent)}声音…`:'');}
+ if(state==='speaking'){$('voice-status').textContent=`正在朗读：${detail.voice.name} · ${detail.voice.lang}`;showAccentVoice(detail.voice);}
  if(state==='retry')$('voice-status').textContent=`${detail.message}，正在尝试其他声音…`;
  readingQueue.handleSpeechState(state);
  if(['done','idle','error'].includes(state)&&!readingQueue.active){playing=null;paintPlaying();}
- if(state==='done')$('voice-status').textContent=`播放完成 · ${detail.voice?.name||'浏览器默认英语声音'}`;
- if(state==='error'){$('voice-status').textContent=`${detail.message}。可换一个声音后点“试听”。`;notice(detail.message);$('speech-help').open=true;$('voice-info').open=true;}
+ if(state==='done')$('voice-status').textContent=`播放完成 · ${accentLabel(accent)} · ${detail.voice.name}`;
+ if(state==='error'){showAccentVoice(null,`${accentLabel(accent)}声音不可用`);$('voice-status').textContent=`${detail.message} 可选择其他${accentLabel(accent)}声音或重新读取声音列表后试听。`;notice(detail.message);$('speech-help').open=true;$('voice-info').open=true;}
 });
 const readingQueue=new ReadingQueue({
  play:word=>speechPlayer.play(word.text,{lang:accent,rate,preferred:voicePreferences[accent]||''}),
@@ -425,7 +426,7 @@ async function recognize(file){
  finally{if(run===ocrRun){if(activeWorker)await activeWorker.terminate().catch(()=>{});worker=null;finishOCR();}}
 }
 $('voice-choice').onchange=()=>{stop();voicePreferences[accent]=$('voice-choice').value;speechPlayer.failed.clear();persist();updateVoice();};
-$('test-voice').onclick=()=>speakText('Hello! This is your English pronunciation practice.',null);
+$('test-voice').onclick=()=>speakText('Water, tomato, better. I parked the car near the theatre.',null);
 $('stop-voice').onclick=()=>{stop();updateVoice();};
 $('refresh-voices').onclick=()=>{speechPlayer.failed.clear();updateVoice();notice('已重新读取设备声音列表。');};
 window.speechSynthesis?.addEventListener('voiceschanged',updateVoice);window.addEventListener('pagehide',()=>{readingQueue.stop();worker?.terminate();documentAbort?.abort();});

@@ -88,6 +88,8 @@ main a { color: var(--theme-accent, #244f42); }
 .help-drawer p { line-height: 1.8; }
 .help-drawer small { display: block; }
 .voice-info { margin: 6px 28px 12px; }
+.accent-status { margin:0 28px 10px; font-size:10px; line-height:1.7; color:var(--theme-muted,#919b85); overflow-wrap:anywhere; }
+.accent-status[data-state="missing"] { color:var(--theme-warning,#a16c3b); }
 .voice-info .voice-status { margin: 8px 0; }
 .study-toolbar .help-drawer,.notebook-footer .help-drawer { margin-top: 0; }
 .sidebar-help { padding: 4px 12px; }
@@ -101,7 +103,7 @@ main a { color: var(--theme-accent, #244f42); }
 .meaning-body { min-width:0; }
 .meaning-tools { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; flex-shrink: 0; }
 .section-label,.eyebrow,.device-note,.brand-en,.intro>p,#folder-total { display: none; }
-@media(max-width:650px){.voice-info{margin-left:20px;margin-right:20px}.reading-heading{flex-wrap:wrap}}
+@media(max-width:650px){.voice-info,.accent-status{margin-left:20px;margin-right:20px}.reading-heading{flex-wrap:wrap}}
 .reading-heading h3 { font-size: 13px; font-weight: 600; margin: 0; }
 .reading-controls .quiet { font-size: 11px; padding: 8px 11px; }
 .reading-directions { display: flex; gap: 8px; margin: 12px 0; }

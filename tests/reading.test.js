@@ -48,7 +48,7 @@ test('bad ranges, missing endpoints and empty search results do not produce an u
 function setup(){
  const calls=[],states=[];let queue;
  class Utterance{constructor(text){this.text=text;}}
- const engine={getVoices:()=>[],cancel(){},speak(u){calls.push(u);}};
+ const engine={getVoices:()=>[{name:'US test',lang:'en-US',voiceURI:'us',localService:true}],cancel(){},speak(u){calls.push(u);}};
  const speech=new SpeechPlayer(engine,Utterance,state=>queue.handleSpeechState(state));
  queue=new ReadingQueue({play:word=>speech.play(word.text),cancel:()=>speech.cancel(),onChange:state=>states.push(state),gap:10});
  return {queue,calls,states,speech};

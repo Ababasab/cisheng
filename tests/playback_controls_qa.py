@@ -6,7 +6,7 @@ url=os.environ.get('QA_URL','http://127.0.0.1:4173/')
 with sync_playwright() as p:
  b=p.chromium.launch(executable_path='C:/Program Files/Google/Chrome/Application/chrome.exe',headless=True)
  page=b.new_page(viewport={'width':390,'height':844});errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
- page.add_init_script("""window.SpeechSynthesisUtterance=class{constructor(text){this.text=text}};window.__calls=[];window.__u=null;Object.defineProperty(window,'speechSynthesis',{value:{getVoices:()=>[],cancel(){__u=null},addEventListener(){},speak(u){__u=u;__calls.push({text:u.text,rate:u.rate});u.onstart?.()}}});window.__end=()=>{let u=__u;__u=null;u?.onend?.()};""")
+ page.add_init_script("""window.SpeechSynthesisUtterance=class{constructor(text){this.text=text}};window.__calls=[];window.__u=null;Object.defineProperty(window,'speechSynthesis',{value:{getVoices:()=>[{name:'US test',lang:'en-US',voiceURI:'us',localService:true}],cancel(){__u=null},addEventListener(){},speak(u){__u=u;__calls.push({text:u.text,rate:u.rate});u.onstart?.()}}});window.__end=()=>{let u=__u;__u=null;u?.onend?.()};""")
  page.goto(url)
  assert page.locator('#speed option').all_text_contents()==['0.1×','0.2×','0.25×','0.5×','0.75×','1×','1.25×','1.5×','1.75×','2×']
  expect(page.locator('#speed')).to_have_value('1')
