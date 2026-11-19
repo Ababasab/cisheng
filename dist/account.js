@@ -84,5 +84,5 @@ export function setupAccount({store,getState,applyState,notice,beforeSwitch=()=>
    const {data,error}=await cloud.client.auth.getSession();if(error)throw error;switchUser(data.session?.user||null);
   }catch(error){status('error','账号服务暂时无法连接，本机词库仍可使用。');showMessage(authMessage(error),true);}
  })();
- return {changed,ready,get status(){return lastStatus;}};
+ return {changed,ready,get status(){return lastStatus;},async dictionaryToken(){await ready;const {data}=await cloud?.client.auth.getSession()||{};return data?.session?.access_token||null;}};
 }

@@ -1,5 +1,7 @@
 // Original bilingual learning examples. Released under CC0 1.0.
 export const curatedExamples={
+'have trouble doing':[['I have trouble remembering names when I meet several people at once.','一次认识好几个人时，我很难记住他们的名字。'],['If you have trouble opening the file, please contact our support team.','如果你打不开文件，请联系我们的支持团队。'],['She had trouble sleeping because the room was too noisy.','房间里太吵，她难以入睡。']],
+'have difficulty doing':[['Some students have difficulty understanding instructions written in English.','有些学生难以理解用英语写的说明。'],['He had difficulty finding a quiet place to study.','他很难找到一个安静的地方学习。'],['If you have difficulty breathing, seek medical help immediately.','如果呼吸困难，请立即就医。']],
 stability:[['The new policy brought stability to the local economy.','新政策为当地经济带来了稳定。'],['Regular exercise can improve the stability of your knees.','经常锻炼可以提高膝关节的稳定性。'],['The engineers tested the stability of the bridge.','工程师们测试了这座桥的稳定性。']],
 exclude:[['The organizers decided to exclude cars from the square.','组织者决定不让汽车进入广场。'],['Please exclude personal details from the public report.','请从公开报告中删去个人信息。'],['We should not exclude anyone from the discussion.','我们不应该把任何人排除在讨论之外。']],
 dilemma:[['She faced a dilemma between work and further study.','她面临工作还是继续深造的两难选择。'],['The team discussed how to resolve this ethical dilemma.','团队讨论了如何解决这一道德困境。'],['His dilemma became clear when both offers arrived.','两份邀请同时到来时，他的两难处境就显现出来了。']],

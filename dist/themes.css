@@ -92,7 +92,13 @@ main a { color: var(--theme-accent, #244f42); }
 .study-toolbar .help-drawer,.notebook-footer .help-drawer { margin-top: 0; }
 .sidebar-help { padding: 4px 12px; }
 .sources-help { margin-top: 20px; }
-.dictionary-link { font-size: 10px; line-height: 1.8; margin-top: 4px; white-space: nowrap; }
+.lookup-oxford { border:0; background:transparent; color:var(--theme-secondary,#78876c); font-size:10px; padding:4px 7px; white-space:nowrap; }
+.definition-source { display:inline-block; margin-left:6px; padding:1px 5px; border-radius:4px; background:var(--theme-soft,#f1f4eb); color:var(--theme-muted,#919b85); font-size:9px; vertical-align:middle; }
+.definition-source[hidden],.oxford-result[hidden] { display:none; }
+.oxford-result { margin-top:8px; font-size:11px; color:var(--theme-secondary,#78876c); line-height:1.8; overflow-wrap:anywhere; }
+.oxford-definition { white-space:pre-line; }
+.oxford-language { display:block; color:var(--theme-muted,#919b85); font-size:9px; }
+.meaning-body { min-width:0; }
 .meaning-tools { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; flex-shrink: 0; }
 .section-label,.eyebrow,.device-note,.brand-en,.intro>p,#folder-total { display: none; }
 @media(max-width:650px){.voice-info{margin-left:20px;margin-right:20px}.reading-heading{flex-wrap:wrap}}

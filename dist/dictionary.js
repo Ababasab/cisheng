@@ -1,11 +1,12 @@
-import {phraseKey,phraseMatches,componentMeaning} from './phrases.js';
+import {phraseKey,phraseMatches,componentMeaning,grammaticalPhrase} from './phrases.js';
 export const dictionaryKey=word=>(word.toLowerCase()+'__').slice(0,2).replace(/[^a-z]/g,'_');
 const CACHE_KEY='word-notes-dictionary-v1';
 const ipaAliases={theatre:'theater'};
 const valid=entry=>entry&&typeof entry.zh==='string'&&typeof entry.ipa==='string';
 export function createDictionaryLookup({fetcher=globalThis.fetch,storage=null,timeout=10000}={}){
  const requests=new Map(),cache=new Map();let saveTimer;
- try{for(const [word,entry] of Object.entries(JSON.parse(storage?.getItem(CACHE_KEY)||'{}')).slice(-3000))if(valid(entry))cache.set(word,entry);}catch{}
+ // Component references are not a resolved phrase: retry them after an update.
+ try{for(const [word,entry] of Object.entries(JSON.parse(storage?.getItem(CACHE_KEY)||'{}')).slice(-3000))if(valid(entry)&&entry.kind!=='components')cache.set(word,entry);}catch{}
  const flush=()=>{clearTimeout(saveTimer);try{storage?.setItem(CACHE_KEY,JSON.stringify(Object.fromEntries(cache)));}catch{}};
  const remember=(word,entry)=>{cache.delete(word);cache.set(word,entry);if(cache.size>3000)cache.delete(cache.keys().next().value);clearTimeout(saveTimer);saveTimer=setTimeout(flush,100);};
  function request(url){
@@ -24,6 +25,9 @@ export function createDictionaryLookup({fetcher=globalThis.fetch,storage=null,ti
   try{const common=await request(`./data/common/${key}.json`);if(Object.hasOwn(common,word)&&valid(common[word]))entry=common[word];}catch{}
   if(!entry){full=await request(`./data/dict-${key}.json`);if(Object.hasOwn(full,word)&&valid(full[word]))entry=full[word];}
   if(!entry&&word.includes(' ')){
+   entry=grammaticalPhrase(word,full||{});
+  }
+  if(!entry&&word.includes(' ')){
    const matches=phraseMatches(word,full||{});
    if(matches.length)entry={zh:'相关词典词条（请按上下文选择）：\n'+matches.map(m=>`${m.text}：${m.zh}`).join('\n'),ipa:'',forms:'',kind:'related'};
    else{
@@ -35,7 +39,7 @@ export function createDictionaryLookup({fetcher=globalThis.fetch,storage=null,ti
    }
   }
   if(entry&&!entry.ipa&&ipaAliases[word]){try{const alias=await lookup(ipaAliases[word]);if(alias?.ipa)entry={...entry,ipa:alias.ipa};}catch{}}
-  if(entry)remember(word,entry);
+  if(entry&&entry.kind!=='components')remember(word,entry);
   return entry||null;
  }
  lookup.flush=flush;return lookup;

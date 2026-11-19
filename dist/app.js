@@ -1,4 +1,5 @@
-import {oxfordSearchURL} from './phrases.js';
+import {lookupOxford} from './oxford.js';
+import {OXFORD_CONFIG} from './oxford-config.js';
 import { cleanEntries, extractWords, extractHeadwords, visibleWords,parseEntryInput } from './words.js';
 import { findColumns, headwordInset, colouredText, removeTableRules } from './layout.js';
 import {readOcrEntries,mergeOcrEntries} from './ocr-entries.js';
@@ -21,7 +22,7 @@ let voicePreferences={};
 let folders=[],activeFolderId=null,editingFolderId=null,clearFolderId=null,deleteFolderId=null,deleteFolderVersion=null;
 let hideAllChinese=false;
 let documentAbort=null,fileReview=null,readingSpeechPhase='loading';
-const chineseOverrides=new Map(),definitions=new Map(),exampleStates=new Map();
+const chineseOverrides=new Map(),definitions=new Map(),exampleStates=new Map(),oxfordStates=new Map();
 function notice(text) { $('notice').textContent = text; $('notice').hidden = false; clearTimeout(noticeTimer); noticeTimer = setTimeout(() => $('notice').hidden = true, 5000); }
 try{profileStore=new ProfileStore(localStorage);initialState=profileStore.boot();}catch{notice('本机存储暂时不可用，请先导出单词备份。');}
 try { const stored=initialState;({folders,words,activeFolderId}=migrateFolders(stored));if(['en-US','en-GB'].includes(stored.accent)) accent = stored.accent; if([...SPEECH_RATES,.7,.9,1.1].includes(stored.rate)) rate=stored.rate; } catch {({folders,words,activeFolderId}=migrateFolders());notice('无法读取本地记录，请导出备份后继续使用。'); }
@@ -143,6 +144,27 @@ function paintDefinition(w,row=null){
  ipa.title='词典参考音标，以英式为主；朗读使用上方选择的口音。';
  meaning.textContent=state?.data?.zh|| (state?.status==='error'?'词典加载失败':state?.status==='missing'?'词典暂未收录，请检查拼写':'正在查释义…');
  retry.hidden=state?.status!=='error';
+ const source=row.querySelector('.definition-source');source.hidden=!state?.data?.zh||['components','related'].includes(state.data.kind);source.textContent=source.hidden?'':'ECDICT';source.title=state?.data?.matchedText?`匹配词条：${state.data.matchedText}`:'本地 ECDICT 词典';
+ paintOxford(w,row);
+}
+function paintOxford(w,row=null){
+ row ||= $('word-list').querySelector(`[data-word-id="${CSS.escape(w.id)}"]`);if(!row)return;
+ const state=oxfordStates.get(w.text.toLowerCase()),body=row.querySelector('.oxford-result'),button=row.querySelector('.lookup-oxford');
+ if(!button)return;
+ button.disabled=state?.status==='loading';button.textContent=state?.status==='loading'?'查询中…':state?.status==='ready'?'重查牛津':'查牛津';
+ body.replaceChildren();body.hidden=!state;
+ if(state?.status==='ready'){
+  const content=element('span','oxford-definition',state.data.definitions.join('\n')),tag=element('span','definition-source','牛津');
+  tag.title='Oxford Dictionaries API 官方返回';body.append(content,tag);
+  if(state.data.language==='en')body.append(element('span','oxford-language','英文释义'));
+ }else if(state)body.textContent=state.status==='loading'?'正在查询牛津…':state.message;
+}
+async function queryOxford(w){
+ const key=w.text.toLowerCase();if(oxfordStates.get(key)?.status==='loading')return;
+ const state={status:'loading'};oxfordStates.set(key,state);paintOxford(w);
+ try{const token=OXFORD_CONFIG.enabled?await accountController?.dictionaryToken():null;state.data=await lookupOxford(w.text,{token});state.status='ready';}
+ catch(error){state.status='error';state.message=error.message;}
+ for(const word of words)if(word.text.toLowerCase()===key)paintOxford(word);
 }
 async function generateExamples(w){
  const key=w.text.toLowerCase(),old=exampleStates.get(key);if(old?.status==='loading')return;
@@ -250,10 +272,12 @@ function render({reset=false,saved=false}={}) {
   const text=document.createElement('span');text.className='word-text';text.textContent=w.text;
   const main=element('div','word-main');main.append(text,element('span','ipa','加载音标…'));
   const meaning=element('div','word-meaning'),meaningBody=element('div','meaning-body');meaningBody.hidden=hiddenChinese(w.id);
-  const meaningText=element('span','meaning-text','正在查释义…');meaningBody.append(meaningText);
+  const meaningText=element('span','meaning-text','正在查释义…'),source=element('span','definition-source');source.hidden=true;
+  const oxford=element('div','oxford-result');oxford.hidden=true;meaningBody.append(meaningText,source,oxford);
   const retry=element('button','retry-definition','重试');retry.hidden=true;retry.onclick=()=>enrich(w,true);
   const toggle=element('button','toggle-chinese',hiddenChinese(w.id)?'显示中文':'隐藏中文');toggle.setAttribute('aria-label',`${hiddenChinese(w.id)?'显示':'隐藏'} ${w.text} 的中文`);toggle.setAttribute('aria-pressed',String(hiddenChinese(w.id)));toggle.onclick=()=>{chineseOverrides.set(w.id,!hiddenChinese(w.id));persist();render();};meaning.append(meaningBody,retry);
-  if(w.text.includes(' ')){const link=element('a','dictionary-link','牛津查词 ↗');link.href=oxfordSearchURL(w.text);link.target='_blank';link.rel='noopener noreferrer';link.setAttribute('aria-label',`在牛津词典查询 ${w.text}`);const tools=element('div','meaning-tools');tools.append(toggle,link);meaning.append(tools);}else meaning.append(toggle);
+  const oxfordButton=element('button','lookup-oxford','查牛津');oxfordButton.setAttribute('aria-label',`查询 ${w.text} 的牛津释义`);oxfordButton.onclick=()=>queryOxford(w);
+  const tools=element('div','meaning-tools');tools.append(toggle);if(OXFORD_CONFIG.enabled)tools.append(oxfordButton);meaning.append(tools);
   const edit=document.createElement('button');edit.className='edit';edit.textContent='编辑';edit.setAttribute('aria-label',`编辑 ${w.text}`);edit.onclick=()=>openReview(w.text,w.id);
   edit.disabled=archived;
   const play=document.createElement('button');play.className='speak';play.innerHTML=speaker;play.setAttribute('aria-label',`朗读 ${w.text}`);play.onclick=()=>speak(w);
