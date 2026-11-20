@@ -32,11 +32,12 @@ async function synthesize(job){
  await init(id);if(id!==latest)return;
  if(!session||loadedLang!==lang){
   if(session){await session.release();session=null;loadedLang=null;}
-  const key=lang==='en-GB'?'gb':'us',label=lang==='en-GB'?'英式声音':'美式声音';
+  const key=lang==='en-GB'?'gb':'us-amy-v2',label=lang==='en-GB'?'英式声音':'美式声音';
   const model=await asset(`models/${key}.onnx`,id,label);if(id!==latest)return;
   config=JSON.parse(new TextDecoder().decode(await asset(`models/${key}.onnx.json`,id,label+'配置')));
   send(id,{type:'progress',message:'正在准备'+label+'…'});
   session=await runtime.InferenceSession.create(model,{executionProviders:['wasm'],graphOptimizationLevel:'all'});loadedLang=lang;
+  if(lang==='en-US')try{const cache=await caches.open(CACHE);for(const path of ['models/us.onnx','models/us.onnx.json'])await cache.delete(new URL(path,base).href);}catch{}
  }
  if(id!==latest)return;send(id,{type:'progress',message:'正在生成发音…'});
  phonemeResult=null;

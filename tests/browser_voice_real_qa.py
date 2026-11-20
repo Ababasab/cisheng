@@ -13,10 +13,12 @@ with sync_playwright() as p:
  context=b.new_context(viewport={'width':1280,'height':950});context.add_init_script(mock);page=context.new_page();errors=[];downloads=[];external=[]
  page.on('pageerror',lambda e:errors.append(str(e)));page.on('request',lambda r:downloads.append(r.url) if '/vendor/speech/' in r.url else None)
  page.on('request',lambda r:external.append(r.url) if any(host in r.url for host in ['huggingface.co','jsdelivr.net','cdnjs.cloudflare','onnxruntime.ai']) else None)
- page.goto(url);page.locator('#manual').click();page.locator('#review-text').fill('passport、car');page.locator('#save-review').click();page.locator('#sort').select_option('original')
+ page.goto(url);page.evaluate("async()=>{const cache=await caches.open('word-notes-speech-v1');for(const path of ['models/us.onnx','models/us.onnx.json'])await cache.put(new URL('./vendor/speech/'+path,location.href),new Response('old Joe cache'))}")
+ page.locator('#manual').click();page.locator('#review-text').fill('passport、car');page.locator('#save-review').click();page.locator('#sort').select_option('original')
  row=page.locator('.word-row').filter(has=page.get_by_text('passport',exact=True));expect(page.locator('#accent-status')).to_contain_text('网页美式')
  row.locator('.speak').click();expect(page.locator('#voice-status')).to_contain_text('播放完成',timeout=240000);assert page.evaluate('__nativeCalls')==0
  first=page.evaluate('({duration:__buffers.at(-1).duration,nonzero:__buffers.at(-1).getChannelData(0).some(x=>Math.abs(x)>.01)})');assert first['nonzero'];assert first['duration']>.1
+ expect(page.locator('#accent-status')).to_contain_text('Amy');assert page.evaluate("async()=>!(await (await caches.open('word-notes-speech-v1')).match(new URL('./vendor/speech/models/us.onnx',location.href)))")
  page.locator('#uk').click();row.locator('.speak').click();expect(page.locator('#voice-status')).to_contain_text('播放完成',timeout=240000);expect(page.locator('#accent-status')).to_contain_text('网页英式')
  uk=page.evaluate('__buffers.at(-1).duration');assert uk>.1
  page.locator('#speed').select_option('0.25');row.locator('.speak').click();expect(page.locator('#voice-status')).to_contain_text('播放完成',timeout=120000);slow=page.evaluate('__buffers.at(-1).duration');assert slow>uk*2.5,(uk,slow)

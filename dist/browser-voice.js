@@ -1,4 +1,4 @@
-export const browserVoice=lang=>({name:lang==='en-GB'?'网页英式 · Alba':'网页美式 · Joe',lang,voiceURI:'__builtin__',localService:true,builtin:true});
+export const browserVoice=lang=>({name:lang==='en-GB'?'网页英式 · Alba':'网页美式 · Amy',lang,voiceURI:'__builtin__',localService:true,builtin:true});
 export class BrowserVoice{
  constructor({WorkerClass=globalThis.Worker,AudioContextClass=globalThis.AudioContext||globalThis.webkitAudioContext,timeout=240000}={}){this.WorkerClass=WorkerClass;this.AudioContextClass=AudioContextClass;this.timeout=timeout;this.sequence=0;this.run=0;this.jobs=new Map();this.audioCache=new Map();}
  unlock(){
@@ -17,7 +17,7 @@ export class BrowserVoice{
  reset(){this.cancel();this.worker?.terminate();this.worker=null;this.audioCache.clear();}
  request(text,lang,rate,progress){
   if(!this.worker){
-   this.worker=new this.WorkerClass(new URL('./browser-voice.worker.js',import.meta.url));
+   this.worker=new this.WorkerClass(new URL('./browser-voice.worker.js?v=us-amy-v2',import.meta.url));
    this.worker.onmessage=({data})=>{const job=this.jobs.get(data.id);if(!job)return;if(data.type==='progress'){job.progress(data.message);return;}clearTimeout(job.timer);this.jobs.delete(data.id);if(data.type==='audio')job.resolve(data);else job.reject(Error(data.message));};
    this.worker.onerror=event=>{event.preventDefault?.();for(const job of this.jobs.values()){clearTimeout(job.timer);job.reject(Error('网页声音引擎启动失败，请刷新后重试。'));}this.jobs.clear();this.worker?.terminate();this.worker=null;};
   }

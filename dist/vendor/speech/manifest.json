@@ -4,8 +4,12 @@
   "phonemizerVersion": "1.0.0",
   "files": {
     "SOURCES.md": {
-      "bytes": 3643,
-      "sha256": "702f7f4e8cff7b59987df73e113aa5b0989c6bc01e86760c892470567c2d7bd3"
+      "bytes": 3897,
+      "sha256": "912f6a20b553d2b41d38585b2a6209add44ca6be131fbfaff7f38ff2d4acff33"
+    },
+    "models/AMY-DATASET-LICENSE.txt": {
+      "bytes": 960,
+      "sha256": "244ff21a910baf28bcb27b1975620a79d2be8611815ecc599f08eb06dd6f000e"
     },
     "models/gb-MODEL_CARD.md": {
       "bytes": 501,
@@ -19,17 +23,17 @@
       "bytes": 6295,
       "sha256": "ed4b1f015a8aae5eb26d4bdeed7b712c660f5698a0dd954aa6df9c8be60b900b"
     },
-    "models/us-MODEL_CARD.md": {
-      "bytes": 423,
-      "sha256": "4b319248135916e8f5433ce7a9fe5271026b05cb598bab05807b22cb17fd129b"
-    },
-    "models/us.onnx": {
+    "models/us-amy-v2.onnx": {
       "bytes": 63221984,
-      "sha256": "abf4b998e34045cbd00eaf050de2de620f81ded6eb8b85a24b022a1c2b3f08d2"
+      "sha256": "cf9ccdec59f05adee47173f6fb4d89e8b0c5f30c178748d2572fe4efd1d2724c"
     },
-    "models/us.onnx.json": {
-      "bytes": 6284,
-      "sha256": "9b91a652090ffa8a49e36569afa9acc8ead2b3a22a950e8e6ca11914f3e85d56"
+    "models/us-amy-v2.onnx.json": {
+      "bytes": 6289,
+      "sha256": "27490c2197e3e7b566b051fc0b1dae21200e72b44c209731419effdbbe0789e5"
+    },
+    "models/us-MODEL_CARD.md": {
+      "bytes": 461,
+      "sha256": "01937275ee0231667fdfb8eec381948acdc9ace98d4bab625dd30dc55c0f3cfe"
     },
     "ort/LICENSE.txt": {
       "bytes": 1073,
@@ -83,5 +87,6 @@
       "bytes": 2057,
       "sha256": "f840820a5733d096abe5ce5e526b1a74aa84ba6f47fbe96faf13606b91e106a3"
     }
-  }
+  },
+  "usVoice": "en_US-amy-medium"
 }

@@ -1,4 +1,4 @@
-# Model card for joe (medium)
+# Model card for amy (medium)
 
 * Language: en_US (English, United States)
 * Speakers: 1
@@ -7,12 +7,12 @@
 
 ## Dataset
 
-* URL: https://github.com/OHF-Voice/voice-datasets
-* License: CC0
+* URL: https://github.com/MycroftAI/mimic3-voices
+* License: See URL
 
 ## Training
 
-Finetuned from the rdh base model (medium quality; nl_BE, one Flemish speaker, CC0), with MRD and SDP.
+Finetuned from the U.S. English hifi_tts_92 base model (medium quality; the voice of Cori Samuel, Hi-Fi TTS reader 92), with MRD and SDP.
 
 Default inference settings are noise_scale 0.5 and noise_w 0.333.
 

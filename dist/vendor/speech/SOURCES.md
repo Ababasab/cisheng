@@ -9,10 +9,15 @@ No text or uploaded vocabulary is transmitted to a speech service.
 Unmodified ONNX models/configurations from `rhasspy/piper-voices`, pinned revision
 `04ca88f5685ca5253c701af3687e155b113bd512`:
 
-- US: `en/en_US/joe/medium/en_US-joe-medium.onnx`. Joe, US English,
+- US: `en/en_US/amy/medium/en_US-amy-medium.onnx`. Amy, US English,
   22,050 Hz. Model card and dataset attribution: [US card](models/us-MODEL_CARD.md).
-  The card identifies the dataset as CC0, from [OHF Voice datasets](https://github.com/OHF-Voice/voice-datasets).
+  The model card links to Mycroft Mimic 3 voice data. Preserve the
+  [CMU Arctic dataset notice](models/AMY-DATASET-LICENSE.txt),
+  [dataset publisher](https://github.com/MycroftAI/mimic3-voices/tree/master/voices/en_US/cmu-arctic_low).
   Phonemization uses the model's `en-us` configuration.
+  Delivered filenames include `us-amy-v2` to bypass old Joe model caches.
+  Once Amy loads successfully, obsolete Joe Cache API entries are removed;
+  UK and shared engine caches remain intact.
 - UK: `en/en_GB/alba/medium/en_GB-alba-medium.onnx`. Alba, UK English,
   22,050 Hz. [Model card](models/gb-MODEL_CARD.md),
   [Alba speech corpus, University of Edinburgh](https://datashare.ed.ac.uk/handle/10283/3270),
